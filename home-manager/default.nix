@@ -30,6 +30,7 @@ in
       ./alacritty.nix
       ./lsp.nix
       ./gnome.nix
+      ./atuin.nix
     ];
   };
 }
