@@ -14,7 +14,7 @@
   environment.variables = {
     GI_TYPELIB_PATH = "/run/current-system/sw/lib/girepository-1.0";
   };
-  #tailscale	
+  #tailscale
   services.tailscale.enable = true;
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
@@ -42,7 +42,7 @@
   	curl
   	btop-cuda
   	htop
-    kitty
+    alacritty
   	neovim
   	git
   	cargo
@@ -61,7 +61,7 @@
   	tailscale
   	localsend
   	sparrow
-  	bitcoin	
+  	bitcoin
   	protonvpn-gui
   	gnupg
   	dig
