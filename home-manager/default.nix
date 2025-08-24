@@ -28,6 +28,7 @@ in
       ./git.nix
       ./helix.nix
       ./alacritty.nix
+      ./lsp.nix
     ];
   };
 }
