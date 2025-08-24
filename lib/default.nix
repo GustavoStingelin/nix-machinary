@@ -6,6 +6,6 @@
     ./devtools.nix
     ./zsh.nix
     ./git.nix
-    ./home-manager.nix
+    ../home-manager
   ];
 }
