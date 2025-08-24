@@ -1,11 +1,11 @@
-{ pkgs, ... }:
+{ ... }:
 
 {
   programs.helix = {
     enable = true;
     settings = {
       theme = "catppuccin_mocha";
-      
+
       editor = {
         line-number = "relative";
         mouse = false;
@@ -34,7 +34,7 @@
         command = "nil";
         config.nil.formatting.command = [ "nixpkgs-fmt" ];
       };
-      
+
       language-server.rust-analyzer = {
         command = "rust-analyzer";
         config.rust-analyzer = {
@@ -43,7 +43,7 @@
           checkOnSave.command = "clippy";
         };
       };
-      
+
       language-server.gopls = {
         command = "gopls";
         config.gopls = {
@@ -52,69 +52,69 @@
           usePlaceholders = true;
         };
       };
-      
+
       language-server.pyright = {
         command = "pyright-langserver";
         args = [ "--stdio" ];
       };
-      
+
       language-server.typescript-language-server = {
         command = "typescript-language-server";
         args = [ "--stdio" ];
       };
-      
+
       language-server.vscode-html-language-server = {
         command = "vscode-html-language-server";
         args = [ "--stdio" ];
       };
-      
+
       language-server.vscode-css-language-server = {
         command = "vscode-css-language-server";
         args = [ "--stdio" ];
       };
-      
+
       language-server.vscode-json-language-server = {
         command = "vscode-json-language-server";
         args = [ "--stdio" ];
       };
-      
+
       language-server.lua-language-server = {
         command = "lua-language-server";
       };
-      
+
       language-server.clangd = {
         command = "clangd";
       };
-      
+
       language-server.zls = {
         command = "zls";
       };
-      
+
       language-server.marksman = {
         command = "marksman";
         args = [ "server" ];
       };
-      
+
       language-server.yaml-language-server = {
         command = "yaml-language-server";
         args = [ "--stdio" ];
       };
-      
+
       language-server.taplo = {
         command = "taplo";
         args = [ "lsp" "stdio" ];
       };
-      
+
       language-server.bash-language-server = {
         command = "bash-language-server";
         args = [ "start" ];
       };
-      
+
       language-server.dockerfile-language-server = {
         command = "docker-langserver";
         args = [ "--stdio" ];
       };
-      
+
       language-server.terraform-ls = {
         command = "terraform-ls";
         args = [ "serve" ];

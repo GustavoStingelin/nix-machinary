@@ -1,15 +1,15 @@
-{ config, pkgs, ... }:
+{ ... }:
 {
   programs.git = {
     enable = true;
-    
+
     # User git configuration
     userName = "Gustavo Stingelin";
     userEmail = "gustavo.stingelin@outlook.com";
-    
+
     extraConfig = {
       init.defaultBranch = "main";
-      
+
       # Git aliases
       alias = {
         a = "add";

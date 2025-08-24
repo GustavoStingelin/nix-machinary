@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, ... }:
 
 let
   home-manager = builtins.fetchTarball "https://github.com/nix-community/home-manager/archive/master.tar.gz";
@@ -18,7 +18,7 @@ in
   # Set zsh as default shell for user
   users.users.head.shell = pkgs.zsh;
 
-  home-manager.users.head = { pkgs, ... }: {
+  home-manager.users.head = { ... }: {
     home.stateVersion = "25.05";
     home.enableNixpkgsReleaseCheck = false;
 

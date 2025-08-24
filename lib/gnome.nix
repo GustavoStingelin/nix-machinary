@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, ... }:
 {
   # Enable GNOME Desktop Environment
   services.xserver = {
@@ -65,7 +65,7 @@
     gnomeExtensions.tiling-assistant
     gnomeExtensions.vitals
     gnomeExtensions.status-icons
-    
+
     # Additional useful tools
     gnome-tweaks # For managing extensions
     dconf-editor # For advanced GNOME settings

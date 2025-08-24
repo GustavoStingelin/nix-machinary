@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, ... }:
 {
   #virtual box settings
    virtualisation.virtualbox.host.enable = true;
