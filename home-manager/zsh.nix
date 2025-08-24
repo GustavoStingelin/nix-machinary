@@ -1,26 +1,23 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, ... }:
 {
-  # Configure zsh system-wide
+  # Configure zsh for user
   programs.zsh = {
     enable = true;
     enableCompletion = true;
-    autosuggestions.enable = true;
+    autosuggestion.enable = true;
     syntaxHighlighting.enable = true;
 
-    # System-wide zsh configuration
-    shellInit = ''
+    # User zsh configuration
+    initContent = ''
       # Add your zsh configuration here
       export EDITOR=nvim
       export PATH="$HOME/.npm-global/bin:$PATH"
     '';
 
-    ohMyZsh = {
+    oh-my-zsh = {
       enable = true;
       theme = "robbyrussell";
       plugins = [ "git" "sudo" ];
     };
   };
-
-  # Set zsh as default shell for your user
-  users.users.head.shell = pkgs.zsh;
 }

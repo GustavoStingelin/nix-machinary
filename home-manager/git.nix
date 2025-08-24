@@ -1,14 +1,14 @@
-{ config, lib, pkgs, ... }:
-
+{ config, pkgs, ... }:
 {
   programs.git = {
     enable = true;
     
-    # System-wide git configuration
-    config = {
+    # User git configuration
+    userName = "Gustavo Stingelin";
+    userEmail = "gustavo.stingelin@outlook.com";
+    
+    extraConfig = {
       init.defaultBranch = "main";
-      user.name = "Gustavo Stingelin";
-      user.email = "gustavo.stingelin@outlook.com";
       
       # Git aliases
       alias = {
