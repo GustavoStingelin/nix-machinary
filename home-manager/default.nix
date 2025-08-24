@@ -31,6 +31,7 @@ in
       ./lsp.nix
       ./gnome.nix
       ./atuin.nix
+      ./gpg.nix
     ];
   };
 }
