@@ -11,6 +11,7 @@
     shellInit = ''
       # Add your zsh configuration here
       export EDITOR=nvim
+      export PATH="$HOME/.npm-global/bin:$PATH"
     '';
 
     ohMyZsh = {
