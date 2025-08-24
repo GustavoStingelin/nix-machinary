@@ -10,6 +10,12 @@
     extraConfig = {
       init.defaultBranch = "main";
 
+      # GPG signing configuration
+      user.signingkey = "0x15CBADFE29F2017B";
+      commit.gpgsign = true;
+      tag.gpgsign = true;
+      gpg.program = "gpg";
+
       # Git aliases
       alias = {
         a = "add";
