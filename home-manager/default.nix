@@ -29,6 +29,7 @@ in
       ./helix.nix
       ./alacritty.nix
       ./lsp.nix
+      ./gnome.nix
     ];
   };
 }
