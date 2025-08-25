@@ -1,7 +1,14 @@
 { config, pkgs, ... }:
 {
   # NVIDIA drivers
-  services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.graphics.enable = true;
+  services.xserver.videoDrivers = [
+    "nvidia"
+    "modesetting"
+  ];
+  boot.blacklistedKernelModules = [
+    "nouveau"
+  ];
   hardware.nvidia = {
     modesetting.enable = true;
     powerManagement.enable = false;
@@ -9,8 +16,20 @@
     open = false;
     nvidiaSettings = true;
     package = config.boot.kernelPackages.nvidiaPackages.stable;
+    prime = {
+      offload = {
+        enable = true;
+        enableOffloadCmd = true;
+      };
+      intelBusId = "PCI:0:2:0";
+      nvidiaBusId = "PCI:1:0:0";
+    };
   };
-  
+  environment.variables = {
+    NVD_BACKEND = "direct";
+    LIBVA_DRIVER_NAME = "nvidia";
+  };
+
   #virtual box settings
    virtualisation.virtualbox.host.enable = true;
    users.extraGroups.docker.members = [ "head" ];
@@ -58,7 +77,6 @@
   	git
   	cargo
   	vscode
-  	zed-editor
   	chromium
   	vivaldi
   	obsidian
