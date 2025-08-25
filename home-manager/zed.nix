@@ -25,6 +25,8 @@
       "terraform"
       "markdown"
       "bash"
+      "sql"
+      "golangci-lint"
     ];
 
     userSettings = {
