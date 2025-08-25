@@ -9,7 +9,7 @@
 
   services.gpg-agent = {
     enable = true;
-    pinentryPackage = pkgs.pinentry-tty;
+    pinentry.package = pkgs.pinentry-tty;
     defaultCacheTtl = 28800; # 8 hours
     maxCacheTtl = 86400;     # 24 hours
   };

@@ -75,5 +75,6 @@
     rsync
     jq
     zsh
+    jetbrains.goland
   ];
 }
