@@ -1,11 +1,26 @@
 { ... }:
 
 {
+  # Set Vivaldi as default browser using XDG
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = "vivaldi-stable.desktop";
+      "x-scheme-handler/http" = "vivaldi-stable.desktop";
+      "x-scheme-handler/https" = "vivaldi-stable.desktop";
+      "x-scheme-handler/about" = "vivaldi-stable.desktop";
+      "x-scheme-handler/unknown" = "vivaldi-stable.desktop";
+    };
+  };
+
   dconf = {
     enable = true;
     settings = {
       # GNOME Dark mode
-      "org/gnome/desktop/interface".color-scheme = "prefer-dark";
+      "org/gnome/desktop/interface" = {
+        color-scheme = "prefer-dark";
+        gtk-theme = "Adwaita-dark";
+      };
       # Better video display
       "org/gnome/mutter" = {
         experimental-features = [
