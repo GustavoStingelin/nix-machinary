@@ -27,7 +27,7 @@ in
       ./zsh.nix
       ./git.nix
       ./helix.nix
-      ./alacritty.nix
+      ./ghostty.nix
       ./lsp.nix
       ./gnome.nix
       ./atuin.nix
