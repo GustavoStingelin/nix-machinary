@@ -14,6 +14,17 @@
           "xwayland-native-scaling" # Scales Xwayland applications to look crisp on HiDPI screens
         ];
       };
+      # Custom keybinding for Ghostty
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0" = {
+        name = "Open Ghostty";
+        command = "ghostty";
+        binding = "<Super>t";
+      };
+      "org/gnome/settings-daemon/plugins/media-keys" = {
+        custom-keybindings = [
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+        ];
+      };
     };
   };
 }
