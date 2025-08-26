@@ -12,6 +12,7 @@
       # Add your zsh configuration here
       export EDITOR=nvim
       export PATH="$HOME/.npm-global/bin:$PATH"
+      export CGO_ENABLED=0
     '';
 
     oh-my-zsh = {
