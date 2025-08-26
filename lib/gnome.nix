@@ -5,6 +5,13 @@
     enable = true;
     displayManager.gdm.enable = true;
     desktopManager.gnome.enable = true;
+    
+    # Keyboard configuration for English and Portuguese
+    xkb = {
+      layout = "us,br";
+      variant = "intl,abnt2";
+      options = "grp:win_space_toggle";
+    };
   };
   # Remove default GNOME applications
   environment.gnome.excludePackages = with pkgs; [
