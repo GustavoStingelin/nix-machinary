@@ -48,6 +48,14 @@
   services.tailscale.enable = true;
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
+  
+  # Create /bin/bash symlink for scripts that expect it
+  system.activationScripts.binbash = {
+    text = ''
+      mkdir -p /bin
+      ln -sf ${pkgs.bash}/bin/bash /bin/bash
+    '';
+  };
   services.libinput.enable = true;
   # multi-touch gesture recognizer
   services.touchegg.enable = true;
