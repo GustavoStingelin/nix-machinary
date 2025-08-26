@@ -140,5 +140,7 @@
     gnumake
     jetbrains.goland
     spotify
+    gcc
+    binutils
   ];
 }
