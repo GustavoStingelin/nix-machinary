@@ -69,6 +69,7 @@
     # Additional useful tools
     gnome-tweaks # For managing extensions
     dconf-editor # For advanced GNOME settings
+    xdotool # For window management and keybind automation
   ];
   # Programs that complement the setup
   programs = {

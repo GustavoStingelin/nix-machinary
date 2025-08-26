@@ -35,9 +35,44 @@
         command = "nvidia-offload ghostty";
         binding = "<Super>t";
       };
+      # Custom keybinding for GoLand
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1" = {
+        name = "Open GoLand";
+        command = "nvidia-offload goland";
+        binding = "<Super>g";
+      };
+      # Custom keybinding for ChatGPT
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2" = {
+        name = "Open ChatGPT";
+        command = "nvidia-offload vivaldi https://chatgpt.com";
+        binding = "<Super>c";
+      };
+      # Custom keybinding for X.com
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3" = {
+        name = "Open X.com";
+        command = "nvidia-offload vivaldi https://x.com";
+        binding = "<Super>x";
+      };
+      # Custom keybinding for Zed Editor
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4" = {
+        name = "Open Zed Editor";
+        command = "nvidia-offload zeditor";
+        binding = "<Super>z";
+      };
+      # Custom keybinding for Vivaldi Browser
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5" = {
+        name = "Open Vivaldi Browser";
+        command = "nvidia-offload vivaldi";
+        binding = "<Super>b";
+      };
       "org/gnome/settings-daemon/plugins/media-keys" = {
         custom-keybindings = [
           "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
         ];
       };
     };
