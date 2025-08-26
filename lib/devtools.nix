@@ -56,7 +56,40 @@
   # $ nix search wget
   services.udev.packages = [pkgs.vial pkgs.via];
 
+  # Create desktop entries for nvidia-offload applications
   environment.systemPackages = with pkgs; [
+    (makeDesktopItem {
+      name = "vivaldi-nvidia";
+      desktopName = "Vivaldi (NVIDIA)";
+      exec = "nvidia-offload vivaldi %U";
+      icon = "vivaldi";
+      categories = [ "Network" "WebBrowser" ];
+      mimeTypes = [ "text/html" "text/xml" "application/xhtml+xml" ];
+    })
+    (makeDesktopItem {
+      name = "goland-nvidia";
+      desktopName = "GoLand (NVIDIA)";
+      exec = "nvidia-offload goland %f";
+      icon = "goland";
+      categories = [ "Development" "IDE" ];
+      mimeTypes = [ "text/plain" "application/x-go" ];
+    })
+    (makeDesktopItem {
+      name = "zed-nvidia";
+      desktopName = "Zed (NVIDIA)";
+      exec = "nvidia-offload zeditor %F";
+      icon = "zed-editor";
+      categories = [ "Development" "TextEditor" ];
+      mimeTypes = [ "text/plain" ];
+    })
+    (makeDesktopItem {
+      name = "ghostty-nvidia";
+      desktopName = "Ghostty (NVIDIA)";
+      exec = "nvidia-offload ghostty";
+      icon = "ghostty";
+      categories = [ "System" "TerminalEmulator" ];
+    })
+  ] ++ [
 	  vim
 	  vial
 	  libgtop

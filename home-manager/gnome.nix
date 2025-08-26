@@ -32,7 +32,7 @@
       # Custom keybinding for Ghostty
       "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0" = {
         name = "Open Ghostty";
-        command = "ghostty";
+        command = "nvidia-offload ghostty";
         binding = "<Super>t";
       };
       "org/gnome/settings-daemon/plugins/media-keys" = {
