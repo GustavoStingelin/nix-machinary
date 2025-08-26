@@ -114,7 +114,9 @@
   	vivaldi
   	obsidian
   	libgccjit
-  	go
+    (go.overrideAttrs (oldAttrs: {
+      CGO_ENABLED = "0";
+    }))
   	rustc
   	docker
   	nodejs_24
