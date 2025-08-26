@@ -137,6 +137,7 @@
     rsync
     jq
     zsh
+    gnumake
     jetbrains.goland
   ];
 }
