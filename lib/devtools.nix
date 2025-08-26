@@ -139,5 +139,6 @@
     zsh
     gnumake
     jetbrains.goland
+    spotify
   ];
 }
