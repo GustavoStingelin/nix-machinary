@@ -146,5 +146,6 @@
     gcc
     pkg-config
     musl.dev
+    winbox
   ];
 }
