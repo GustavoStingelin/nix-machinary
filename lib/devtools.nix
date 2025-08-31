@@ -147,5 +147,6 @@
     pkg-config
     musl.dev
     winbox
+    dbeaver-bin
   ];
 }
