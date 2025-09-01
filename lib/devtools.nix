@@ -57,6 +57,9 @@
   # $ nix search wget
   services.udev.packages = [pkgs.vial pkgs.via];
 
+  services.keybase.enable = true;
+  services.kbfs.enable = true;
+
   # Create desktop entries for nvidia-offload applications
   environment.systemPackages = with pkgs; [
     (makeDesktopItem {
@@ -148,5 +151,8 @@
     musl.dev
     winbox
     dbeaver-bin
+    keybase
+    kbfs
+    keybase-gui
   ];
 }
