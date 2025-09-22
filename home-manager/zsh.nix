@@ -1,5 +1,10 @@
 { pkgs, ... }:
 {
+  # Install mise via Nix
+  home.packages = with pkgs; [
+    mise
+  ];
+
   # Configure zsh for user
   programs.zsh = {
     enable = true;
@@ -16,6 +21,9 @@
 
       # Accept suggestion with Ctrl+Space
       bindkey '^ ' autosuggest-accept
+
+      # Activate mise
+      eval "$(mise activate zsh)"
     '';
 
     oh-my-zsh = {
