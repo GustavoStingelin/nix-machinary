@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs, ... }:
 {
   # Configure zsh for user
   programs.zsh = {
@@ -23,5 +23,17 @@
       theme = "robbyrussell";
       plugins = [ "git" "sudo" ];
     };
+
+    plugins = [
+      {
+        name = "fzf-tab";
+        src = pkgs.fetchFromGitHub {
+          owner = "Aloxaf";
+          repo = "fzf-tab";
+          rev = "v1.2.0";
+          sha256 = "sha256-Qv8zAiMtrr67CbLRrFjGaPzFZcOiMVEFLg1Z+N6VMhg=";
+        };
+      }
+    ];
   };
 }
