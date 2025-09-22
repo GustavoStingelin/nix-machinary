@@ -13,6 +13,9 @@
       export EDITOR=nvim
       export PATH="$HOME/.npm-global/bin:$PATH"
       export CGO_ENABLED=0
+
+      # Accept suggestion with Ctrl+Space
+      bindkey '^ ' autosuggest-accept
     '';
 
     oh-my-zsh = {
