@@ -3,6 +3,7 @@
   # Install mise via Nix
   home.packages = with pkgs; [
     mise
+    just
   ];
 
   # Configure zsh for user
@@ -24,6 +25,12 @@
 
       # Activate mise
       eval "$(mise activate zsh)"
+
+      # Enable just completion
+      autoload -U compinit && compinit
+      if command -v just >/dev/null 2>&1; then
+        source <(just --completions zsh)
+      fi
     '';
 
     oh-my-zsh = {
