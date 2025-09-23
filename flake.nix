@@ -48,7 +48,6 @@
               ./home-manager/helix.nix
               ./home-manager/ghostty.nix
               ./home-manager/lsp.nix
-              ./home-manager/gnome.nix
               ./home-manager/atuin.nix
               ./home-manager/gpg.nix
             ];
@@ -106,9 +105,9 @@
                 ./home-manager/helix.nix
                 ./home-manager/ghostty.nix
                 ./home-manager/lsp.nix
-                ./home-manager/gnome.nix
                 ./home-manager/atuin.nix
                 ./home-manager/gpg.nix
+                ./home-manager/tuis.nix
               ];
             }
           ];
@@ -131,9 +130,9 @@
                 ./home-manager/helix.nix
                 ./home-manager/ghostty.nix
                 ./home-manager/lsp.nix
-                ./home-manager/gnome.nix
                 ./home-manager/atuin.nix
                 ./home-manager/gpg.nix
+                ./home-manager/tuis.nix
               ];
             }
           ];
