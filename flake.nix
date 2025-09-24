@@ -108,6 +108,7 @@
                 ./home-manager/atuin.nix
                 ./home-manager/gpg.nix
                 ./home-manager/tuis.nix
+                ./home-manager/ruby.nix
               ];
             }
           ];
@@ -133,6 +134,7 @@
                 ./home-manager/atuin.nix
                 ./home-manager/gpg.nix
                 ./home-manager/tuis.nix
+                ./home-manager/ruby.nix
               ];
             }
           ];
