@@ -16,6 +16,8 @@
       tag.gpgsign = true;
       gpg.program = "gpg";
 
+      push.autoSetupRemote = true;
+
       # Git aliases
       alias = {
         a = "add";
