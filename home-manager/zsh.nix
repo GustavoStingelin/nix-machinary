@@ -4,6 +4,8 @@
   home.packages = with pkgs; [
     mise
     just
+    bat
+    ripgrep
   ];
 
   # Configure zsh for user
