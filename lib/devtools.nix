@@ -28,6 +28,7 @@
   environment.variables = {
     NVD_BACKEND = "direct";
     LIBVA_DRIVER_NAME = "nvidia";
+    GI_TYPELIB_PATH = "/run/current-system/sw/lib/girepository-1.0";
   };
 
   #virtual box settings
@@ -41,9 +42,6 @@
   	setSocketVariable = true;
   };
   virtualisation.docker.enable = true;
-  environment.variables = {
-    GI_TYPELIB_PATH = "/run/current-system/sw/lib/girepository-1.0";
-  };
   #tailscale
   services.tailscale.enable = true;
   # Allow unfree packages
@@ -134,7 +132,6 @@
   	neofetch
   	discord
   	vlc
-  	curl
     ripgrep
     fd
     sd
@@ -147,7 +144,6 @@
     stdenv.cc
     libcap
     gcc
-    pkg-config
     musl.dev
     winbox
     dbeaver-bin

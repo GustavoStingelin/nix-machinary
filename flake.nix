@@ -22,6 +22,20 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
+      homeImports = [
+        ./home-manager/zed.nix
+        ./home-manager/zsh.nix
+        ./home-manager/git.nix
+        ./home-manager/helix.nix
+        ./home-manager/ghostty.nix
+        ./home-manager/lsp.nix
+        ./home-manager/atuin.nix
+        ./home-manager/gpg.nix
+        ./home-manager/gh.nix
+        ./home-manager/tuis.nix
+        ./home-manager/ruby.nix
+      ];
+
       # Common configuration shared between systems
       commonModules = [
         ./lib
@@ -41,16 +55,7 @@
             home.stateVersion = "25.05";
             home.enableNixpkgsReleaseCheck = false;
 
-            imports = [
-              ./home-manager/zed.nix
-              ./home-manager/zsh.nix
-              ./home-manager/git.nix
-              ./home-manager/helix.nix
-              ./home-manager/ghostty.nix
-              ./home-manager/lsp.nix
-              ./home-manager/atuin.nix
-              ./home-manager/gpg.nix
-            ];
+            imports = homeImports;
           };
         }
       ];
@@ -98,18 +103,7 @@
               home.stateVersion = "25.05";
               home.enableNixpkgsReleaseCheck = false;
 
-              imports = [
-                ./home-manager/zed.nix
-                ./home-manager/zsh.nix
-                ./home-manager/git.nix
-                ./home-manager/helix.nix
-                ./home-manager/ghostty.nix
-                ./home-manager/lsp.nix
-                ./home-manager/atuin.nix
-                ./home-manager/gpg.nix
-                ./home-manager/tuis.nix
-                ./home-manager/ruby.nix
-              ];
+              imports = homeImports;
             }
           ];
         };
@@ -124,18 +118,7 @@
               home.stateVersion = "25.05";
               home.enableNixpkgsReleaseCheck = false;
 
-              imports = [
-                ./home-manager/zed.nix
-                ./home-manager/zsh.nix
-                ./home-manager/git.nix
-                ./home-manager/helix.nix
-                ./home-manager/ghostty.nix
-                ./home-manager/lsp.nix
-                ./home-manager/atuin.nix
-                ./home-manager/gpg.nix
-                ./home-manager/tuis.nix
-                ./home-manager/ruby.nix
-              ];
+              imports = homeImports;
             }
           ];
         };
