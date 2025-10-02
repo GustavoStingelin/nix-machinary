@@ -7,6 +7,53 @@
     userName = "Gustavo Stingelin";
     userEmail = "gustavo.stingelin@outlook.com";
 
+    ignores = [
+      "debug/"
+      "target/"
+
+      # for projects that don't use mise...
+      ".mise/"
+
+      # Mac
+      ".DS_Store"
+      ".fseventsd"
+      ".Spotlight-V100"
+      ".TemporaryItems"
+      ".Trashes"
+
+      # Helix
+      ".helix/"
+
+      # Zed
+      ".zed/"
+
+      # VSCode Workspace Folder
+      ".vscode/"
+
+      # Golang
+      ".gocache/"
+      ".gomodcache/"
+
+      # Python
+      "*.pyc"
+      "*.egg"
+      "*.out"
+      "venv/"
+      "**/**/__pycache__/"
+
+      # direnv
+      ".direnv"
+      ".envrc"
+
+      # NodeJS/Web dev
+      ".env/"
+      "node_modules"
+      ".sass-cache"
+
+      # Claude
+      "**/.claude/settings.local.json"
+    ];
+
     extraConfig = {
       init.defaultBranch = "main";
 
