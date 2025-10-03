@@ -30,6 +30,9 @@
       # VSCode Workspace Folder
       ".vscode/"
 
+      #Jetbrains
+      ".idea/"
+
       # Golang
       ".gocache/"
       ".gomodcache/"
