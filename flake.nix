@@ -32,6 +32,7 @@
         ./home-manager/atuin.nix
         ./home-manager/gpg.nix
         ./home-manager/gh.nix
+        ./home-manager/clis.nix
         ./home-manager/tuis.nix
         ./home-manager/ruby.nix
       ];
