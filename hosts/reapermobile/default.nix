@@ -75,4 +75,8 @@
 
   # State version
   system.stateVersion = "25.05";
+
+  # Non nix binaries
+  programs.nix-ld.enable = true;
+
 }
