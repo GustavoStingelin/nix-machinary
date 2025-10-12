@@ -69,11 +69,7 @@
           inherit system;
           modules = commonModules ++ [
             disko.nixosModules.disko
-            ./disko.nix
-            {
-              networking.hostName = "reapermobile";
-              system.stateVersion = "25.05";
-            }
+            ./hosts/reapermobile
           ];
         };
 
@@ -83,11 +79,7 @@
         #   inherit system;
         #   modules = commonModules ++ [
         #     disko.nixosModules.disko
-        #     ./disko.nix
-        #     {
-        #       networking.hostName = "reaper";
-        #       system.stateVersion = "25.05";
-        #     }
+        #     ./hosts/reaper
         #   ];
         # };
       };
