@@ -6,6 +6,7 @@
     just
     bat
     ripgrep
+    fzf
   ];
 
   # Configure zsh for user
