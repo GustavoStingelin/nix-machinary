@@ -7,6 +7,7 @@
       theme = "catppuccin_mocha";
 
       editor = {
+        end-of-line-diagnostics = "hint";
         line-number = "relative";
         mouse = false;
         cursor-shape = {
@@ -16,15 +17,28 @@
         };
         indent-guides.render = true;
         color-modes = true;
+        true-color = true;
         auto-format = true;
         auto-save = true;
         completion-trigger-len = 1;
+        lsp = {
+          display-messages = true;
+          snippets = true;
+        };
+        statusline = {
+          left = ["mode" "spinner" "version-control" "file-name"];
+        };
+        gutters = ["diagnostics" "line-numbers" "spacer" "diff"];
       };
 
       keys.normal = {
         space.space = "file_picker";
         space.w = ":w";
         space.q = ":q";
+        "A-," = "goto_previous_buffer";
+        "A-." = "goto_next_buffer";
+        "A-w" = ":buffer-close";
+        "A-/" = "repeat_last_motion";
         esc = [ "collapse_selection" "keep_primary_selection" ];
       };
     };
