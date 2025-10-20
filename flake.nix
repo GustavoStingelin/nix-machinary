@@ -14,15 +14,22 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    catppuccin = {
+      url = "github:catppuccin/nix/release-25.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, home-manager, disko, flake-utils, ... }:
+  outputs = { nixpkgs, home-manager, disko, catppuccin, flake-utils, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
       homeImports = [
+        catppuccin.homeModules.catppuccin
+        ./home-manager/catppuccin.nix
         ./home-manager/zed.nix
         ./home-manager/zsh.nix
         ./home-manager/git.nix

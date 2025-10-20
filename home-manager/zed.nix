@@ -41,14 +41,6 @@
         };
       };
 
-      theme = {
-        mode = "system";
-        light = "Catppuccin Latte";
-        dark = "Catppuccin Mocha";
-      };
-
-      icon_theme = "Catppuccin Mocha";
-
       features = {
         edit_prediction_provider = "copilot";
       };
