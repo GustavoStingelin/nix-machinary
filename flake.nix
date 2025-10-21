@@ -41,6 +41,7 @@
         ./home-manager/gh.nix
         ./home-manager/clis.nix
         ./home-manager/tuis.nix
+        ./home-manager/zellij.nix
         ./home-manager/ruby.nix
       ];
 
