@@ -7,6 +7,7 @@
     bat
     ripgrep
     fzf
+    nushell
   ];
 
   # Configure zsh for user
