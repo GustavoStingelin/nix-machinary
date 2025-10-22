@@ -8,6 +8,7 @@
     ripgrep
     fzf
     nushell
+    zoxide
   ];
 
   # Configure zsh for user
