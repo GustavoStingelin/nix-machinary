@@ -40,3 +40,8 @@ hostname:
     @echo "Usage examples:"
     @echo "  just nixos-switch reapermobile"
     @echo "  just home-switch reaper"
+
+
+# Check flake
+check:
+    nix flake check

@@ -22,7 +22,7 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, home-manager, disko, catppuccin, flake-utils, ... }:
+  outputs = { self, nixpkgs, home-manager, disko, catppuccin, flake-utils, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -127,10 +127,10 @@
     } // flake-utils.lib.eachDefaultSystem (system: {
       # Development shell
       devShells.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          nixos-rebuild
-          home-manager
-          git
+        buildInputs = [
+          pkgs.git
+          pkgs.nix
+          home-manager.packages.${system}.home-manager
         ];
 
         shellHook = ''
@@ -144,6 +144,16 @@
           echo "  home-manager switch --flake .#reaper         # Desktop Ubuntu"
           echo "  home-manager switch --flake .#head           # Generic config"
         '';
+      };
+
+      # Checks to validate evaluation/build of configurations
+      checks = {
+        # Ensure the NixOS host evaluates and can build the system closure
+        nixos-reapermobile = self.nixosConfigurations.reapermobile.config.system.build.toplevel;
+
+        # Ensure Home Manager configs evaluate and build activation packages
+        hm-reaper = self.homeConfigurations.reaper.activationPackage;
+        hm-head = self.homeConfigurations.head.activationPackage;
       };
     });
 }
