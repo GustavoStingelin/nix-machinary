@@ -108,21 +108,6 @@
             }
           ];
         };
-
-        # Generic home-manager config for other systems
-        head = home-manager.lib.homeManagerConfiguration {
-          inherit pkgs;
-          modules = [
-            {
-              home.username = "head";
-              home.homeDirectory = "/home/head";
-              home.stateVersion = "25.05";
-              home.enableNixpkgsReleaseCheck = false;
-
-              imports = homeImports;
-            }
-          ];
-        };
       };
     } // flake-utils.lib.eachDefaultSystem (system: {
       # Development shell
@@ -142,7 +127,6 @@
           echo ""
           echo "  # Home Manager (Ubuntu/non-NixOS):"
           echo "  home-manager switch --flake .#reaper         # Desktop Ubuntu"
-          echo "  home-manager switch --flake .#head           # Generic config"
         '';
       };
 
@@ -153,7 +137,6 @@
 
         # Ensure Home Manager configs evaluate and build activation packages
         hm-reaper = self.homeConfigurations.reaper.activationPackage;
-        hm-head = self.homeConfigurations.head.activationPackage;
       };
     });
 }
