@@ -20,9 +20,14 @@
     };
 
     flake-utils.url = "github:numtide/flake-utils";
+
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, disko, catppuccin, flake-utils, ... }:
+  outputs = { self, nixpkgs, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -109,6 +114,18 @@
           ];
         };
       };
+
+      # nix-darwin (macOS) configurations
+      darwinConfigurations = {
+        # Apple Silicon Mac (adjust if you use x86_64-darwin)
+        reapermac = nix-darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          specialArgs = { inherit home-manager homeImports; };
+          modules = [
+            ./hosts/reapermac
+          ];
+        };
+      };
     } // flake-utils.lib.eachDefaultSystem (system: {
       # Development shell
       devShells.default = pkgs.mkShell {
@@ -137,6 +154,12 @@
 
         # Ensure Home Manager configs evaluate and build activation packages
         hm-reaper = self.homeConfigurations.reaper.activationPackage;
+
+        # Evaluate macOS config on Linux without building macOS derivations
+        darwin-reapermac-eval = let
+          dcfg = self.darwinConfigurations.reapermac;
+          _ = builtins.deepSeq dcfg.config.system.build.toplevel true;
+        in pkgs.writeText "darwin-reapermac-eval-ok" "ok";
       };
     });
 }

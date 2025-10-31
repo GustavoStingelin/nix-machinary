@@ -27,6 +27,10 @@ home-switch system:
 home-build system:
     home-manager build --flake .#{{system}}
 
+## DarwinNix MacOS System Commands
+# Apply darwin configuration
+darwin-switch system:
+    sudo darwin-rebuild switch --flake .#{{system}}
 
 # System Info
 # Show current system hostname and available configurations
@@ -36,6 +40,7 @@ hostname:
     @echo "Available configurations:"
     @echo "  reapermobile - Dell notebook (NixOS)"
     @echo "  reaper       - Desktop (Ubuntu/NixOS)"
+    @echo "  reapermac    - MacBook (macOS)"
     @echo ""
     @echo "Usage examples:"
     @echo "  just nixos-switch reapermobile"
