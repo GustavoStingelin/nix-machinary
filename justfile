@@ -50,3 +50,6 @@ hostname:
 # Check flake
 check:
     nix flake check
+
+collect-garbage:
+    nix-collect-garbage -d
