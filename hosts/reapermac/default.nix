@@ -9,18 +9,19 @@
   system = {
     stateVersion = 6;
     primaryUser = "head";
-    defaults = {
-      dock = {
-        autohide = true;
-        magnification = true;
-        showRecentApps = false;        
-        
-    }
+   # defaults = {
+   #   dock = {
+   #     autohide = true;
+   #     magnification = true;
+   #     showRecentApps = false;        
+   #   };  
+   # };
   };
 
   networking.hostName = "reapermac";
-  security.pam.enableSudoTouchIdAuth = true;
+  security.pam.services.sudo_local.touchIdAuth = true;
   nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.allowBroken = true;
 
   nix = {
     # When Nix is installed with `--determinate`
@@ -37,7 +38,7 @@
     };
   };
 
-  services.nix-daemon.enable = true;
+  #services.nix-daemon.enable = true;
 
   programs.zsh.enable = true;
 

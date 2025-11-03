@@ -2,7 +2,7 @@
 
 {
   programs.ghostty = {
-    enable = true;
+   # enable = true;
     settings = {
       font-size = 12;
       shell-integration = "zsh";
