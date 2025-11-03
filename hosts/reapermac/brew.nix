@@ -25,6 +25,8 @@
       "arc"
       "bitwarden"
       "brave-browser"
+      "claude-code"
+      "codex"
       "discord"
       "obsidian"
       "obs"
