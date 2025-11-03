@@ -39,6 +39,7 @@
         ./home-manager/zsh.nix
         ./home-manager/git.nix
         ./home-manager/helix.nix
+        ./home-manager/alacritty.nix
         ./home-manager/ghostty.nix
         ./home-manager/lsp.nix
         ./home-manager/atuin.nix
