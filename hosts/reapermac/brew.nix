@@ -22,12 +22,14 @@
     caskArgs.require_sha = true;
 
     casks = [
+      "alacritty"
       "arc"
       "bitwarden"
       "brave-browser"
       "claude-code"
       "codex"
       "discord"
+      "ghostty"
       "obsidian"
       "obs"
       "orbstack"
