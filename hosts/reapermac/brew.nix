@@ -17,6 +17,7 @@
         restart_service = true;
       }
       "torsocks"
+      "mise"
     ];
 
     caskArgs.require_sha = true;
