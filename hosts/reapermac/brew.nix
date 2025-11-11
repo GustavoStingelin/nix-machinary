@@ -29,6 +29,7 @@
       "brave-browser"
       "claude-code"
       "codex"
+      "goland"
       "discord"
       "ghostty"
       "obsidian"
