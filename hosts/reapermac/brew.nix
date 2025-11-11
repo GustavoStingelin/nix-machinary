@@ -18,6 +18,7 @@
       }
       "torsocks"
       "mise"
+      "neovim"
     ];
 
     caskArgs.require_sha = true;
