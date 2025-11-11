@@ -21,7 +21,9 @@
     # User zsh configuration
     initContent = ''
       # Add your zsh configuration here
-      export EDITOR=nvim
+      export EDITOR=hx
+      export VISUAL=hx
+      export GIT_EDITOR=hx
       export PATH="$HOME/.npm-global/bin:$PATH"
       export CGO_ENABLED=0
 

@@ -59,6 +59,7 @@
 
     extraConfig = {
       init.defaultBranch = "main";
+      core.editor = "hx";
 
       # GPG signing configuration
       user.signingkey = "0x15CBADFE29F2017B";
