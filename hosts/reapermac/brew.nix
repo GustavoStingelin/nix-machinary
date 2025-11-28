@@ -33,6 +33,7 @@
       "goland"
       "discord"
       "ghostty"
+      "keybase"
       "obsidian"
       "obs"
       "orbstack"
