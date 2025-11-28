@@ -55,6 +55,9 @@
 
       # Claude
       "**/.claude/settings.local.json"
+
+      #ignore my own just commands, bc some projects only uses make...
+      ".justfile"
     ];
 
     extraConfig = {
