@@ -10,6 +10,7 @@
         dynamic_title = true;
         decorations = "none";
         startup_mode = "Maximized";
+        option_as_alt = "Both";
       };
 
       font = {
