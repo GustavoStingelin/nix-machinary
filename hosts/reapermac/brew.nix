@@ -19,6 +19,7 @@
       "torsocks"
       "mise"
       "neovim"
+      "oci-cli"
     ];
 
     caskArgs.require_sha = true;
