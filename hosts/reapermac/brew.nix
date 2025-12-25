@@ -20,6 +20,10 @@
       "mise"
       "neovim"
       "oci-cli"
+      "cmake"
+      "ninja"
+      "terminal-notifier"
+      "opencode"
     ];
 
     caskArgs.require_sha = true;
