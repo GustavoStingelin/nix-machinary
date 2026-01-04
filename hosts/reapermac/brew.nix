@@ -31,6 +31,7 @@
     casks = [
       "alacritty"
       "arc"
+      "thebrowsercompany-dia"
       "bitwarden"
       "brave-browser"
       "claude-code"
