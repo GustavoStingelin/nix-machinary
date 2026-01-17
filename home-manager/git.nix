@@ -58,6 +58,9 @@
 
       #ignore my own just commands, bc some projects only uses make...
       ".justfile"
+
+      #ignore as my own instructions
+      "AGENTS.md"
     ];
 
     extraConfig = {
