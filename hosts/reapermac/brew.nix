@@ -23,7 +23,7 @@
       "cmake"
       "ninja"
       "terminal-notifier"
-      "opencode"
+      "anomalyco/tap/opencode"
     ];
 
     caskArgs.require_sha = true;
