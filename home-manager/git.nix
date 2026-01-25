@@ -61,6 +61,8 @@
 
       #ignore as my own instructions
       "AGENTS.md"
+      ".sisyphus/"
+      
     ];
 
     extraConfig = {
