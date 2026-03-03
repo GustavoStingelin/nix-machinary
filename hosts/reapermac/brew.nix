@@ -11,6 +11,13 @@
     };
 
     brews = [
+      "anomalyco/tap/opencode"
+      "argocd"
+      "boost"
+      "capnp"
+      "cmake"
+      "helm"
+      "libevent"
       "llvm"
       {
         name = "tor";
@@ -20,10 +27,14 @@
       "mise"
       "neovim"
       "oci-cli"
-      "cmake"
+      "pkgconf"
+      "qrencode"
+      "qt@6"
       "ninja"
+      "terraform"
       "terminal-notifier"
-      "anomalyco/tap/opencode"
+      "tmux"
+      "zeromq"
     ];
 
     caskArgs.require_sha = true;
@@ -31,11 +42,11 @@
     casks = [
       "alacritty"
       "arc"
-      "thebrowsercompany-dia"
       "bitwarden"
       "brave-browser"
       "claude-code"
       "codex"
+      "flameshot"
       "goland"
       "discord"
       "ghostty"
@@ -45,6 +56,7 @@
       "obs"
       "orbstack"
       "pycharm"
+      "rustrover"
       "secretive"
       "signal"
       "sparrow"
