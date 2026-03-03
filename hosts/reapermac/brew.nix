@@ -12,29 +12,11 @@
 
     brews = [
       "anomalyco/tap/opencode"
-      "argocd"
-      "boost"
-      "capnp"
-      "cmake"
-      "helm"
-      "libevent"
-      "llvm"
       {
         name = "tor";
         restart_service = true;
       }
-      "torsocks"
-      "mise"
-      "neovim"
-      "oci-cli"
-      "pkgconf"
-      "qrencode"
-      "qt@6"
-      "ninja"
-      "terraform"
       "terminal-notifier"
-      "tmux"
-      "zeromq"
     ];
 
     caskArgs.require_sha = true;
