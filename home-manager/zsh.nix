@@ -2,7 +2,7 @@
 {
   # Install mise via Nix
   home.packages = with pkgs; [
-    mise
+    unstable.mise
     just
     bat
     ripgrep

@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-25.05";
@@ -27,10 +28,19 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
     let
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      overlay-unstable = final: prev: {
+        unstable = import nixpkgs-unstable {
+          system = prev.system;
+          config = prev.config;
+        };
+      };
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ overlay-unstable ];
+      };
 
       homeImports = [
         catppuccin.homeModules.catppuccin
@@ -56,6 +66,7 @@
         ./lib
         home-manager.nixosModules.home-manager
         {
+          nixpkgs.overlays = [ overlay-unstable ];
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.backupFileExtension = "backup";
@@ -121,7 +132,7 @@
         # Apple Silicon Mac (adjust if you use x86_64-darwin)
         reapermac = nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
-          specialArgs = { inherit home-manager homeImports; };
+          specialArgs = { inherit home-manager homeImports nixpkgs-unstable; };
           modules = [
             ./hosts/reapermac
           ];

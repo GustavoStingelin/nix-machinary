@@ -1,4 +1,4 @@
-{ pkgs, home-manager, homeImports, ... }:
+{ pkgs, home-manager, homeImports, nixpkgs-unstable, ... }:
 
 {
   imports = [
@@ -22,6 +22,14 @@
   security.pam.services.sudo_local.touchIdAuth = true;
   nixpkgs.config.allowUnfree = true;
   nixpkgs.config.allowBroken = true;
+  nixpkgs.overlays = [
+    (final: prev: {
+      unstable = import nixpkgs-unstable {
+        system = prev.system;
+        config = prev.config;
+      };
+    })
+  ];
 
   nix = {
     # When Nix is installed with `--determinate`
