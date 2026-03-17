@@ -80,6 +80,27 @@
         "type": "github"
       }
     },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "yazelix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1773681856,
+        "narHash": "sha256-+bRqxoFCJFO9ZTFhcCkzNXbDT3b8AEk88fyjB7Is6eo=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "57d5560ee92a424fb71fde800acd6ed2c725dfce",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
     "nix-darwin": {
       "inputs": {
         "nixpkgs": [
@@ -141,7 +162,8 @@
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-unstable": "nixpkgs-unstable"
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "yazelix": "yazelix"
       }
     },
     "systems": {
@@ -156,6 +178,29 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "yazelix": {
+      "inputs": {
+        "home-manager": "home-manager_2",
+        "nixpkgs": [
+          "nixpkgs-unstable"
+        ]
+      },
+      "locked": {
+        "dir": "home_manager",
+        "lastModified": 1773660911,
+        "narHash": "sha256-6AB3ZnUuyaU8aj53lH4WgduwpqbdTtgXaVkYMkTu1iE=",
+        "owner": "luccahuguet",
+        "repo": "yazelix",
+        "rev": "7cf826b160f60de7c0450929c57ac22f7a2d0f2a",
+        "type": "github"
+      },
+      "original": {
+        "dir": "home_manager",
+        "owner": "luccahuguet",
+        "repo": "yazelix",
         "type": "github"
       }
     }

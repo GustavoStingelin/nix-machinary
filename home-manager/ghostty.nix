@@ -21,6 +21,9 @@
       # Shell
       shell-integration = "zsh";
       quit-after-last-window-closed = true;
+
+      # Yazelix: launch zellij+yazi on startup
+      command = "sh -c 'exec $HOME/.config/yazelix/shells/posix/start_yazelix.sh'";
     };
   };
 }

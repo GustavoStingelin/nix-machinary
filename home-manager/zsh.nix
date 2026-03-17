@@ -24,7 +24,7 @@
       export EDITOR=hx
       export VISUAL=hx
       export GIT_EDITOR=hx
-      export PATH="$HOME/.npm-global/bin:$PATH"
+      export PATH="$HOME/.npm-global/bin:/Applications/Ghostty.app/Contents/MacOS:$PATH"
       export CGO_ENABLED=0
 
       # Accept suggestion with Ctrl+Space
@@ -38,6 +38,13 @@
       if command -v just >/dev/null 2>&1; then
         source <(just --completions zsh)
       fi
+
+      # YAZELIX START v4 - Yazelix managed configuration (do not modify this comment)
+      # Yazelix zsh integration (sourced conditionally - only if yazelix config exists)
+      if [[ -f "$HOME/.config/yazelix/shells/zsh/yazelix_zsh_config.zsh" ]]; then
+        source "$HOME/.config/yazelix/shells/zsh/yazelix_zsh_config.zsh"
+      fi
+      # YAZELIX END v4 - End of Yazelix managed configuration
     '';
 
     oh-my-zsh = {

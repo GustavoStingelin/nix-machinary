@@ -1,4 +1,4 @@
-{ pkgs, home-manager, homeImports, nixpkgs-unstable, ... }:
+{ pkgs, home-manager, homeImports, nixpkgs-unstable, yazelix, ... }:
 
 {
   imports = [
@@ -54,10 +54,11 @@
 
   home-manager.useGlobalPkgs = true;
   home-manager.useUserPackages = true;
+  home-manager.backupFileExtension = "backup";
   home-manager.users.head = {
     home.stateVersion = "25.05";
     home.enableNixpkgsReleaseCheck = false;
-    imports = homeImports;
+    imports = homeImports ++ [ yazelix.homeManagerModules.yazelix ];
   };
 
   environment.systemPackages = with pkgs; [

@@ -26,9 +26,14 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-25.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    yazelix = {
+      url = "github:luccahuguet/yazelix?dir=home_manager";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, catppuccin, flake-utils, nix-darwin, yazelix, ... }:
     let
       system = "x86_64-linux";
       overlay-unstable = final: prev: {
@@ -60,6 +65,7 @@
         ./home-manager/tuis.nix
         ./home-manager/zellij.nix
         ./home-manager/ruby.nix
+        ./home-manager/yazelix.nix
       ];
 
       # Common configuration shared between systems
@@ -133,7 +139,7 @@
         # Apple Silicon Mac (adjust if you use x86_64-darwin)
         reapermac = nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
-          specialArgs = { inherit home-manager homeImports nixpkgs-unstable; };
+          specialArgs = { inherit home-manager homeImports nixpkgs-unstable yazelix; };
           modules = [
             ./hosts/reapermac
           ];
@@ -171,8 +177,9 @@
         # Evaluate macOS config on Linux without building macOS derivations
         darwin-reapermac-eval = let
           dcfg = self.darwinConfigurations.reapermac;
-          _ = builtins.deepSeq dcfg.config.system.build.toplevel true;
-        in pkgs.writeText "darwin-reapermac-eval-ok" "ok";
+        in builtins.seq
+          (builtins.deepSeq dcfg.config.system.build.toplevel true)
+          (pkgs.writeText "darwin-reapermac-eval-ok" "ok");
       };
     });
 }

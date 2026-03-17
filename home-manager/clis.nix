@@ -4,6 +4,7 @@
     [
       act
       argocd
+      devenv
       boost
       capnproto
       cmake
