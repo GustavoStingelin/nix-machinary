@@ -12,7 +12,6 @@
       kubeseal
       libevent
       llvm
-      neovim
       ninja
       oci-cli
       pkg-config

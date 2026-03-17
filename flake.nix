@@ -51,6 +51,7 @@
         ./home-manager/helix.nix
         ./home-manager/alacritty.nix
         ./home-manager/ghostty.nix
+        ./home-manager/neovim.nix
         ./home-manager/lsp.nix
         ./home-manager/atuin.nix
         ./home-manager/gpg.nix
