@@ -69,6 +69,10 @@
       init.defaultBranch = "main";
       core.editor = "hx";
 
+      # Delta pager options (core.pager and interactive.diffFilter are set automatically by programs.git.delta)
+      merge.conflictstyle = "diff3";
+      diff.colorMoved = "default";
+
       # GPG signing configuration
       user.signingkey = "0x15CBADFE29F2017B";
       commit.gpgsign = true;
@@ -86,5 +90,15 @@
         last = "log -1 HEAD";
       };
     };
+
+    delta = {
+      enable = true;
+      options = {
+        navigate = true;
+        side-by-side = true;
+        line-numbers = true;
+        syntax-theme = "ansi";
+      };
+    };
   };
-} 
+}
