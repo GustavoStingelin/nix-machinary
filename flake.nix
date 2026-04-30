@@ -15,6 +15,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v0.4.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     catppuccin = {
       url = "github:catppuccin/nix/release-25.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -28,7 +33,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, lanzaboote, catppuccin, flake-utils, nix-darwin, ... }:
     let
       system = "x86_64-linux";
       overlay-unstable = final: prev: {
@@ -99,15 +104,16 @@
           ];
         };
 
-        # Future NixOS systems can be added here
-        # Example: Desktop with NixOS - hostname: reaper
-        # reaper = nixpkgs.lib.nixosSystem {
-        #   inherit system;
-        #   modules = commonModules ++ [
-        #     disko.nixosModules.disko
-        #     ./hosts/reaper
-        #   ];
-        # };
+        # Gaming desktop - hostname: reaperdesktop
+        reaperdesktop = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = commonModules ++ [
+            disko.nixosModules.disko
+            lanzaboote.nixosModules.lanzaboote
+            (import ./disko.nix { disks = [ "/dev/nvme0n1" ]; })
+            ./hosts/reaperdesktop
+          ];
+        };
       };
 
       # Home Manager configurations for Ubuntu/non-NixOS systems
@@ -153,7 +159,7 @@
           echo "Available commands:"
           echo "  # NixOS systems:"
           echo "  nixos-rebuild switch --flake .#reapermobile  # Dell notebook"
-          echo "  # nixos-rebuild switch --flake .#reaper      # Desktop (when installed)"
+          echo "  nixos-rebuild switch --flake .#reaperdesktop # Gaming desktop"
           echo ""
           echo "  # Home Manager (Ubuntu/non-NixOS):"
           echo "  home-manager switch --flake .#reaper         # Desktop Ubuntu"
@@ -164,6 +170,7 @@
       checks = {
         # Ensure the NixOS host evaluates and can build the system closure
         nixos-reapermobile = self.nixosConfigurations.reapermobile.config.system.build.toplevel;
+        nixos-reaperdesktop = self.nixosConfigurations.reaperdesktop.config.system.build.toplevel;
 
         # Ensure Home Manager configs evaluate and build activation packages
         hm-reaper = self.homeConfigurations.reaper.activationPackage;
