@@ -124,7 +124,7 @@
   	uv
   	tailscale
   	localsend
-  	sparrow
+	  unstable.sparrow
   	bitcoin
   	protonvpn-gui
   	gnupg
