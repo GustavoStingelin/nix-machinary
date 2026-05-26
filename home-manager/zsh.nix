@@ -38,6 +38,9 @@
       if command -v just >/dev/null 2>&1; then
         source <(just --completions zsh)
       fi
+
+      # some shit bin that installs on my user folder...
+      export PATH="$HOME/.signet/bin:$PATH"
     '';
 
     oh-my-zsh = {

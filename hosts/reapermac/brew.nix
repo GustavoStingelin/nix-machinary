@@ -17,6 +17,7 @@
         restart_service = true;
       }
       "terminal-notifier"
+      "libyaml"
     ];
 
     caskArgs.require_sha = true;
