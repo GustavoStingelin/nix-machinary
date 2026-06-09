@@ -16,6 +16,7 @@
         restart_service = true;
       }
       "terminal-notifier"
+      "rtk"
       "libyaml"
     ];
 
@@ -28,6 +29,7 @@
       "brave-browser"
       "claude-code"
       "codex"
+      "dbeaver-community"
       "flameshot"
       "goland"
       "discord"
@@ -47,6 +49,7 @@
       "transmission"
       "spotify"
       "visual-studio-code"
+      "mullvad-vpn"
     ];
   };
 
