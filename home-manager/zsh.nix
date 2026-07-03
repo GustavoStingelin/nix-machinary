@@ -41,6 +41,8 @@
 
       # some shit bin that installs on my user folder...
       export PATH="$HOME/.signet/bin:$PATH"
+
+      export PATH="/Users/head/.local/bin:$PATH"
     '';
 
     oh-my-zsh = {
