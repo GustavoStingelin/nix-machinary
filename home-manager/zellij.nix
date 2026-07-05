@@ -11,10 +11,6 @@ let
   };
   layoutText = ''
     layout {
-      tab {
-        pane
-      }
-
       default_tab_template {
         pane size=1 borderless=true {
           plugin location="file:${zjstatus}" {
@@ -74,6 +70,8 @@ in
   programs.zellij.enable = true;
 
   xdg.configFile."zellij/config.kdl".text = ''
+    pane_frames false
+
     plugins {
       zellij-sessionizer location="file:${sessionizer}" {
         cwd "/"
