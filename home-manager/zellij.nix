@@ -70,7 +70,7 @@ in
   programs.zellij.enable = true;
 
   xdg.configFile."zellij/config.kdl".text = ''
-    pane_frames false
+    pane_frames true
 
     plugins {
       zellij-sessionizer location="file:${sessionizer}" {
