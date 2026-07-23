@@ -19,13 +19,13 @@ assert-log $ZWM_TEST_LOG want-log
 worktree_path=$ZWM_TEST_PR_PATH
 display_identity=pr-123-feature/pr-ready
 tab_action=created
-tab_title=project:pr-123-feature/pr-ready
+tab_title=project:pr-123
 tab_worktree=$ZWM_TEST_PR_PATH
 -- focused --
 worktree_path=$ZWM_TEST_PR_PATH
 display_identity=pr-123-feature/pr-ready
 tab_action=focused
-tab_title=project:pr-123-feature/pr-ready
+tab_title=project:pr-123
 tab_worktree=$ZWM_TEST_PR_PATH
 -- want-log --
 {"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
@@ -38,14 +38,14 @@ tab_worktree=$ZWM_TEST_PR_PATH
 {"sequence":8,"command":"gh","args":["pr","checkout","123","--branch","$ZWM_TEST_PR_BRANCH"],"cwd":"$ZWM_TEST_PR_PATH"}
 {"sequence":9,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
 {"sequence":10,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
-{"sequence":11,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:pr-123-feature/pr-ready","--cwd","$ZWM_TEST_PR_PATH"],"cwd":"$WORK"}
+{"sequence":11,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:pr-123","--cwd","$ZWM_TEST_PR_PATH"],"cwd":"$WORK"}
 {"sequence":12,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
 {"sequence":13,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
 {"sequence":14,"command":"gh","args":["pr","view","123","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}
 {"sequence":15,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/$ZWM_TEST_PR_BRANCH"],"cwd":"$HOME/code/project"}
 {"sequence":16,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
 {"sequence":17,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
-{"sequence":18,"command":"zellij","args":["action","go-to-tab-name","project:pr-123-feature/pr-ready"],"cwd":"$WORK"}
+{"sequence":18,"command":"zellij","args":["action","go-to-tab-name","project:pr-123"],"cwd":"$WORK"}
 {"sequence":19,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
 {"sequence":20,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
 {"sequence":21,"command":"gh","args":["pr","view","789","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}

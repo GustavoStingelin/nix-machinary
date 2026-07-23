@@ -108,7 +108,7 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 			return nil, checkoutErr
 		}
 		tab, launchErr := service.tabs.Launch(ctx, zellij.Input{
-			Title: zellij.TabTitle(string(resolution.Key) + ":" + result.Display),
+			Title: zellij.TabTitle(string(resolution.Key) + ":pr-" + string(result.Number)),
 			Cwd:   zellij.Directory(result.Worktree),
 		})
 		if launchErr != nil {
