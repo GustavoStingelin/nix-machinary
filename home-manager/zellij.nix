@@ -100,4 +100,16 @@ ${layoutText}
   xdg.configFile."zellij/layouts/sessionizer.kdl".text = ''
 ${layoutText}
   '';
+
+  xdg.configFile."zellij/layouts/worktree.kdl".text = ''
+    layout {
+      tab split_direction="horizontal" {
+        pane
+        pane split_direction="vertical" {
+          pane
+          pane
+        }
+      }
+    }
+  '';
 }

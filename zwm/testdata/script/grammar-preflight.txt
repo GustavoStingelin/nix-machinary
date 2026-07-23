@@ -1,0 +1,38 @@
+# The compiled binary preserves the renamed grammar and rejects before external calls.
+exec zwm --help
+cmp stdout help
+! stderr .
+
+assert-exit 64 zwm -C
+stderr '^zwm: usage: option .-C. requires a value\n$'
+
+assert-exit 64 zwm --project=project co feature/ready
+stderr '^zwm: usage: unknown global option .--project=project.\n$'
+
+assert-exit 64 zwm co --project project
+stderr '^zwm: usage: global option .--project. must appear before the subcommand\n$'
+
+env PATH=$WORK/empty
+assert-exit 69 $WORK/bin/zwm -C project co feature/ready
+stderr '^zwm: preflight: required command .git. is not available\n$'
+assert-log $ZWM_TEST_LOG empty-log
+env PATH=$ZWM_TEST_PATH
+
+env ZELLIJ=
+assert-exit 69 zwm -C project co feature/ready
+stderr '^zwm: preflight: must be run inside an existing Zellij session\n$'
+assert-log $ZWM_TEST_LOG empty-log
+
+-- help --
+Usage:
+  zwm --help | -h
+  zwm [-C <name-or-path> | --project <name-or-path>] <command>
+
+Commands:
+  co <branch> | co -b <new-branch> [<start-point>]
+  pr <number|url|branch>
+
+Global options:
+  -C <name-or-path>          Select a project before the subcommand.
+  --project <name-or-path>   Select a project before the subcommand.
+-- empty-log --

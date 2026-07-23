@@ -1,0 +1,35 @@
+# A dirty linked source creates from its invocation HEAD and remains dirty.
+exec realgit -C $HOME/code/project branch source/current
+exec realgit -C $HOME/code/project worktree add --quiet $WORK/source source/current
+cp dirty $WORK/source/tracked.txt
+exec realgit -C $WORK/source status --porcelain=v1
+cp stdout before-status
+
+cd $WORK/source
+exec zwm co -b feature/new
+cmpenv stdout $WORK/created
+! stderr .
+
+exec realgit -C $WORK/source status --porcelain=v1
+cmp stdout $WORK/before-status
+assert-log $ZWM_TEST_LOG $WORK/want-log
+
+-- dirty --
+initial
+dirty
+-- created --
+worktree_path=$ZWM_TEST_NEW_PATH
+display_identity=feature/new
+tab_action=created
+tab_title=project:feature/new
+tab_worktree=$ZWM_TEST_NEW_PATH
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$WORK/source"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$WORK/source"}
+{"sequence":3,"command":"git","args":["check-ref-format","--branch","feature/new"],"cwd":"$HOME/code/project"}
+{"sequence":4,"command":"git","args":["rev-parse","--verify","--quiet","--end-of-options","HEAD^{commit}"],"cwd":"$WORK/source"}
+{"sequence":5,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/new"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":7,"command":"git","args":["worktree","add","-b","feature/new","$ZWM_TEST_NEW_PATH","$ZWM_TEST_GH_COMMIT"],"cwd":"$HOME/code/project"}
+{"sequence":8,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK/source"}
+{"sequence":9,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:feature/new","--cwd","$ZWM_TEST_NEW_PATH"],"cwd":"$WORK/source"}

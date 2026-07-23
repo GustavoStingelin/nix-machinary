@@ -1,0 +1,22 @@
+template: testify
+packages:
+  github.com/GustavoStingelin/nix-machinary/zwm/internal/app:
+    config:
+      dir: internal/mocks
+      pkgname: mocks
+      structname: Mock{{.InterfaceName}}
+    interfaces:
+      BranchGit:
+        config:
+          filename: branch_git.go
+      TabLauncher:
+        config:
+          filename: tab_launcher.go
+  github.com/GustavoStingelin/nix-machinary/zwm/internal/cli:
+    config:
+      dir: internal/mocks
+      filename: service.go
+      pkgname: mocks
+      structname: Mock{{.InterfaceName}}
+    interfaces:
+      Service:

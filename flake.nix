@@ -30,16 +30,25 @@
 
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, disko, catppuccin, flake-utils, nix-darwin, ... }:
     let
-      system = "x86_64-linux";
-      overlay-unstable = final: prev: {
-        unstable = import nixpkgs-unstable {
+      linuxSystem = "x86_64-linux";
+      overlay-unstable = final: prev:
+        let
+          unstable = import nixpkgs-unstable {
           system = prev.system;
           config = prev.config;
+          };
+        in
+        {
+          inherit unstable;
+          sparrow = unstable.sparrow;
         };
+      overlay-zwm = final: prev: {
+        zwm = final.callPackage ./packages/zwm.nix { };
       };
-      pkgs = import nixpkgs {
-        inherit system;
-        overlays = [ overlay-unstable ];
+      overlays = [ overlay-unstable overlay-zwm ];
+      linuxPkgs = import nixpkgs {
+        system = linuxSystem;
+        inherit overlays;
       };
 
       homeImports = [
@@ -59,6 +68,7 @@
         ./home-manager/clis.nix
         ./home-manager/tuis.nix
         ./home-manager/zellij.nix
+        ./home-manager/zwm.nix
         ./home-manager/ruby.nix
       ];
 
@@ -67,7 +77,7 @@
         ./lib
         home-manager.nixosModules.home-manager
         {
-          nixpkgs.overlays = [ overlay-unstable ];
+          nixpkgs.overlays = overlays;
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.backupFileExtension = "backup";
@@ -76,7 +86,7 @@
           programs.zsh.enable = true;
 
           # Set zsh as default shell for user
-          users.users.head.shell = pkgs.zsh;
+          users.users.head.shell = linuxPkgs.zsh;
 
           home-manager.users.head = {
             home.stateVersion = "25.05";
@@ -92,7 +102,7 @@
       nixosConfigurations = {
         # Dell notebook - hostname: reapermobile
         reapermobile = nixpkgs.lib.nixosSystem {
-          inherit system;
+          system = linuxSystem;
           modules = commonModules ++ [
             disko.nixosModules.disko
             ./hosts/reapermobile
@@ -114,7 +124,7 @@
       homeConfigurations = {
         # Desktop with Ubuntu - hostname: reaper
         reaper = home-manager.lib.homeManagerConfiguration {
-          inherit pkgs;
+          pkgs = linuxPkgs;
           modules = [
             {
               home.username = "head";
@@ -133,22 +143,33 @@
         # Apple Silicon Mac (adjust if you use x86_64-darwin)
         reapermac = nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
-          specialArgs = { inherit home-manager homeImports nixpkgs-unstable; };
+          specialArgs = { inherit home-manager homeImports; };
           modules = [
+            { nixpkgs.overlays = overlays; }
             ./hosts/reapermac
           ];
         };
       };
-    } // flake-utils.lib.eachDefaultSystem (system: {
+    } // flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system overlays;
+        };
+      in
+      {
       # Development shell
       devShells.default = pkgs.mkShell {
         buildInputs = [
+          pkgs.go_1_24
           pkgs.git
           pkgs.nix
           home-manager.packages.${system}.home-manager
         ];
 
         shellHook = ''
+          unset GOROOT
+          unset GOBIN
+          export GOCACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/nix-machinary/go-build-1.24.10"
           echo "Nix development environment loaded"
           echo "Available commands:"
           echo "  # NixOS systems:"
@@ -160,8 +181,10 @@
         '';
       };
 
+      packages.zwm = pkgs.zwm;
+
       # Checks to validate evaluation/build of configurations
-      checks = {
+      checks = (nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
         # Ensure the NixOS host evaluates and can build the system closure
         nixos-reapermobile = self.nixosConfigurations.reapermobile.config.system.build.toplevel;
 
@@ -171,8 +194,14 @@
         # Evaluate macOS config on Linux without building macOS derivations
         darwin-reapermac-eval = let
           dcfg = self.darwinConfigurations.reapermac;
-          _ = builtins.deepSeq dcfg.config.system.build.toplevel true;
-        in pkgs.writeText "darwin-reapermac-eval-ok" "ok";
+        in builtins.seq dcfg.config.system.build.toplevel.drvPath (pkgs.writeText "darwin-reapermac-eval-ok" "ok");
+      }) // {
+        zwm-all = pkgs.runCommand "zwm-all" {
+          nativeBuildInputs = [ pkgs.zwm ];
+        } ''
+          zwm --help >/dev/null
+          touch "$out"
+        '';
       };
     });
 }

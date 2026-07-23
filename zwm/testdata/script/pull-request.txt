@@ -1,0 +1,59 @@
+# PR creation accepts a selector, preserves raw failure stderr, and retains recovery.
+exec realgit -C $HOME/code/project branch zwt/pr-123-legacy
+exec zwm -C project pr 123
+cmpenv stdout created
+! stderr .
+
+exec zwm -C project pr 123
+cmpenv stdout focused
+! stderr .
+
+assert-exit 64 zwm -C project pr 789
+stderr '^zwm: usage: could not resolve pull request .789.\n$'
+
+assert-exit 1 zwm -C project pr 456
+stderr 'fake gh: injected checkout failure for 456\nzwm: recovery: detached managed pull-request worktree remains at .+; inspect it and complete or remove it manually when safe\nzwm: external: could not checkout pull request\n'
+assert-log $ZWM_TEST_LOG want-log
+
+-- created --
+worktree_path=$ZWM_TEST_PR_PATH
+display_identity=pr-123-feature/pr-ready
+tab_action=created
+tab_title=project:pr-123-feature/pr-ready
+tab_worktree=$ZWM_TEST_PR_PATH
+-- focused --
+worktree_path=$ZWM_TEST_PR_PATH
+display_identity=pr-123-feature/pr-ready
+tab_action=focused
+tab_title=project:pr-123-feature/pr-ready
+tab_worktree=$ZWM_TEST_PR_PATH
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"gh","args":["pr","view","123","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}
+{"sequence":4,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/$ZWM_TEST_PR_BRANCH"],"cwd":"$HOME/code/project"}
+{"sequence":5,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["rev-parse","--verify","--quiet","--end-of-options","HEAD^{commit}"],"cwd":"$HOME/code/project"}
+{"sequence":7,"command":"git","args":["-C","$HOME/code/project","worktree","add","--detach","$ZWM_TEST_PR_PATH","$ZWM_TEST_GH_COMMIT"],"cwd":"$WORK"}
+{"sequence":8,"command":"gh","args":["pr","checkout","123","--branch","$ZWM_TEST_PR_BRANCH"],"cwd":"$ZWM_TEST_PR_PATH"}
+{"sequence":9,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":10,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":11,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:pr-123-feature/pr-ready","--cwd","$ZWM_TEST_PR_PATH"],"cwd":"$WORK"}
+{"sequence":12,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":13,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":14,"command":"gh","args":["pr","view","123","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}
+{"sequence":15,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/$ZWM_TEST_PR_BRANCH"],"cwd":"$HOME/code/project"}
+{"sequence":16,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":17,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":18,"command":"zellij","args":["action","go-to-tab-name","project:pr-123-feature/pr-ready"],"cwd":"$WORK"}
+{"sequence":19,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":20,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":21,"command":"gh","args":["pr","view","789","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}
+{"sequence":22,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":23,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":24,"command":"gh","args":["pr","view","456","--json","number,headRefName","--jq","[.number, .headRefName] | @tsv"],"cwd":"$HOME/code/project"}
+{"sequence":25,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/$ZWM_TEST_FAILURE_PR_BRANCH"],"cwd":"$HOME/code/project"}
+{"sequence":26,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":27,"command":"git","args":["rev-parse","--verify","--quiet","--end-of-options","HEAD^{commit}"],"cwd":"$HOME/code/project"}
+{"sequence":28,"command":"git","args":["-C","$HOME/code/project","worktree","add","--detach","$ZWM_TEST_FAILURE_PR_PATH","$ZWM_TEST_GH_COMMIT"],"cwd":"$WORK"}
+{"sequence":29,"command":"gh","args":["pr","checkout","456","--branch","$ZWM_TEST_FAILURE_PR_BRANCH"],"cwd":"$ZWM_TEST_FAILURE_PR_PATH"}

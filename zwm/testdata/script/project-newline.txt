@@ -1,0 +1,21 @@
+# An external newline-containing project path resolves through real Git without breaking argv.
+exec zwm --project $ZWM_TEST_NEWLINE_PROJECT co feature/newline
+cmpenv stdout created
+! stderr .
+assert-log $ZWM_TEST_LOG want-log
+
+-- created --
+worktree_path=$ZWM_TEST_NEWLINE_PATH
+display_identity=feature/newline
+tab_action=created
+tab_title=$ZWM_TEST_NEWLINE_KEY:feature/newline
+tab_worktree=$ZWM_TEST_NEWLINE_PATH
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":3,"command":"git","args":["check-ref-format","--branch","feature/newline"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":4,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/newline"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":5,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":6,"command":"git","args":["worktree","add","$ZWM_TEST_NEWLINE_PATH","feature/newline"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":7,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":8,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","$ZWM_TEST_NEWLINE_KEY:feature/newline","--cwd","$ZWM_TEST_NEWLINE_PATH"],"cwd":"$WORK"}

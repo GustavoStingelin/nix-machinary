@@ -47,8 +47,27 @@ hostname:
     @echo "  just home-switch reaper"
 
 
+# Go verification
+zwm-format:
+    GOTOOLCHAIN=go1.24.10 go -C zwm fmt ./...
+
+zwm-test:
+    GOTOOLCHAIN=go1.24.10 go -C zwm test ./...
+
+zwm-race:
+    GOTOOLCHAIN=go1.24.10 go -C zwm test -race ./...
+
+zwm-vet:
+    GOTOOLCHAIN=go1.24.10 go -C zwm vet ./...
+
+zwm-mock:
+    GOTOOLCHAIN=go1.24.10 go -C zwm tool mockery --config .mockery.yml
+
+zwm-check: zwm-format zwm-test zwm-race zwm-vet zwm-mock
+    GIT_MASTER=1 git diff --exit-code -- zwm/internal/mocks
+
 # Check flake
-check:
+check: zwm-check
     nix flake check
 
 collect-garbage:

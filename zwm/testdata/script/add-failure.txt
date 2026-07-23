@@ -1,0 +1,13 @@
+# A failed Git add forwards raw stderr and does not launch a tab.
+env ZWM_TEST_GIT_FAILURE=worktree-add
+assert-exit 1 zwm -C project co feature/ready
+stderr '^fake git: injected worktree add failure\nzwm: external: add existing branch worktree\n$'
+assert-log $ZWM_TEST_LOG want-log
+
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"git","args":["check-ref-format","--branch","feature/ready"],"cwd":"$HOME/code/project"}
+{"sequence":4,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/ready"],"cwd":"$HOME/code/project"}
+{"sequence":5,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["worktree","add","$ZWM_TEST_EXISTING_PATH","feature/ready"],"cwd":"$HOME/code/project"}

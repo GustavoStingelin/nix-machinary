@@ -1,0 +1,23 @@
+# The real binary creates a Git worktree and reports all five stable result lines.
+exec zwm -C project co feature/ready
+cmpenv stdout result
+! stderr .
+exec realgit -C $ZWM_TEST_EXISTING_PATH symbolic-ref --short HEAD
+stdout '^feature/ready\n$'
+assert-log $ZWM_TEST_LOG want-log
+
+-- result --
+worktree_path=$ZWM_TEST_EXISTING_PATH
+display_identity=feature/ready
+tab_action=created
+tab_title=project:feature/ready
+tab_worktree=$ZWM_TEST_EXISTING_PATH
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"git","args":["check-ref-format","--branch","feature/ready"],"cwd":"$HOME/code/project"}
+{"sequence":4,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/ready"],"cwd":"$HOME/code/project"}
+{"sequence":5,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["worktree","add","$ZWM_TEST_EXISTING_PATH","feature/ready"],"cwd":"$HOME/code/project"}
+{"sequence":7,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":8,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:feature/ready","--cwd","$ZWM_TEST_EXISTING_PATH"],"cwd":"$WORK"}

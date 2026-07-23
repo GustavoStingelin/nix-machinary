@@ -1,0 +1,40 @@
+# Existing branch creation uses the real binary, real Git, and exact focus reuse.
+exec realgit -C $HOME/code/project branch feature/selected
+exec zwm -C project co feature/selected
+cmpenv stdout created
+! stderr .
+
+exec zwm -C project co feature/selected
+cmpenv stdout focused
+! stderr .
+
+assert-log $ZWM_TEST_LOG want-log
+
+-- created --
+worktree_path=$ZWM_TEST_SELECTED_PATH
+display_identity=feature/selected
+tab_action=created
+tab_title=project:feature/selected
+tab_worktree=$ZWM_TEST_SELECTED_PATH
+-- focused --
+worktree_path=$ZWM_TEST_SELECTED_PATH
+display_identity=feature/selected
+tab_action=focused
+tab_title=project:feature/selected
+tab_worktree=$ZWM_TEST_SELECTED_PATH
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"git","args":["check-ref-format","--branch","feature/selected"],"cwd":"$HOME/code/project"}
+{"sequence":4,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/selected"],"cwd":"$HOME/code/project"}
+{"sequence":5,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["worktree","add","$ZWM_TEST_SELECTED_PATH","feature/selected"],"cwd":"$HOME/code/project"}
+{"sequence":7,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":8,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project:feature/selected","--cwd","$ZWM_TEST_SELECTED_PATH"],"cwd":"$WORK"}
+{"sequence":9,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":10,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":11,"command":"git","args":["check-ref-format","--branch","feature/selected"],"cwd":"$HOME/code/project"}
+{"sequence":12,"command":"git","args":["show-ref","--verify","--quiet","refs/heads/feature/selected"],"cwd":"$HOME/code/project"}
+{"sequence":13,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":14,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":15,"command":"zellij","args":["action","go-to-tab-name","project:feature/selected"],"cwd":"$WORK"}
