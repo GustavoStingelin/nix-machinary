@@ -51,8 +51,10 @@ func parseSubcommand(project ProjectNameOrPath, subcommand string, arguments []s
 	}
 
 	switch subcommand {
-	case "co":
+	case "wco":
 		return parseCheckout(project, arguments)
+	case "o":
+		return parseOpenProject(project, arguments)
 	case "pr":
 		return parsePullRequest(project, arguments)
 	default:
@@ -62,17 +64,17 @@ func parseSubcommand(project ProjectNameOrPath, subcommand string, arguments []s
 
 func parseCheckout(project ProjectNameOrPath, arguments []string) (parsedInvocation, error) {
 	if len(arguments) == 0 || arguments[0] == "" {
-		return parsedInvocation{}, usageError("co requires an existing local branch")
+		return parsedInvocation{}, usageError("wco requires an existing local branch")
 	}
 	if arguments[0] == "-b" {
 		if len(arguments) < 2 || arguments[1] == "" {
-			return parsedInvocation{}, usageError("co -b requires a new branch")
+			return parsedInvocation{}, usageError("wco -b requires a new branch")
 		}
 		if len(arguments) > 3 {
-			return parsedInvocation{}, usageError("co -b accepts a new branch and optional start-point")
+			return parsedInvocation{}, usageError("wco -b accepts a new branch and optional start-point")
 		}
 		if len(arguments) == 3 && arguments[2] == "" {
-			return parsedInvocation{}, usageError("co -b requires a non-empty start-point when provided")
+			return parsedInvocation{}, usageError("wco -b requires a non-empty start-point when provided")
 		}
 
 		action := CheckoutNew{Branch: BranchName(arguments[1])}
@@ -85,16 +87,37 @@ func parseCheckout(project ProjectNameOrPath, arguments []string) (parsedInvocat
 		}, nil
 	}
 	if strings.HasPrefix(arguments[0], "-") {
-		return parsedInvocation{}, usageError("unknown co option '" + arguments[0] + "'")
+		return parsedInvocation{}, usageError("unknown wco option '" + arguments[0] + "'")
 	}
 	if len(arguments) != 1 {
-		return parsedInvocation{}, usageError("co accepts exactly one existing local branch")
+		return parsedInvocation{}, usageError("wco accepts exactly one existing local branch")
 	}
 
 	action := CheckoutExisting{Branch: BranchName(arguments[0])}
 	return parsedInvocation{
 		invocation:    Invocation{Project: project, Action: action},
-		frameworkArgs: []string{"zwm", "co", string(action.Branch)},
+		frameworkArgs: []string{"zwm", "wco", string(action.Branch)},
+	}, nil
+}
+
+func parseOpenProject(project ProjectNameOrPath, arguments []string) (parsedInvocation, error) {
+	if project != "" {
+		return parsedInvocation{}, usageError("o does not accept -C/--project")
+	}
+	if len(arguments) == 0 || arguments[0] == "" {
+		return parsedInvocation{}, usageError("o requires a project name or path")
+	}
+	if len(arguments) != 1 {
+		return parsedInvocation{}, usageError("o accepts exactly one project name or path")
+	}
+	if strings.HasPrefix(arguments[0], "-") {
+		return parsedInvocation{}, usageError("invalid project name or path '" + arguments[0] + "'")
+	}
+
+	selectedProject := ProjectNameOrPath(arguments[0])
+	return parsedInvocation{
+		invocation:    Invocation{Project: selectedProject, Action: OpenProject{}},
+		frameworkArgs: []string{"zwm", "o", string(selectedProject)},
 	}, nil
 }
 
@@ -129,7 +152,7 @@ func rejectLateProjectOptions(arguments []string) error {
 }
 
 func argumentsForCheckoutNew(action CheckoutNew) []string {
-	arguments := []string{"zwm", "co", "-b", string(action.Branch)}
+	arguments := []string{"zwm", "wco", "-b", string(action.Branch)}
 	if action.StartPoint != "" {
 		return append(arguments, string(action.StartPoint))
 	}

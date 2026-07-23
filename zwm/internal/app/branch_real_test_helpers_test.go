@@ -28,10 +28,10 @@ func (tabs *task5Tabs) Launch(_ context.Context, input zellij.Input) (zellij.Res
 		tabs.titles = make(map[zellij.TabTitle]struct{})
 	}
 	if _, found := tabs.titles[input.Title]; found {
-		return zellij.Result{Action: zellij.Focused, Title: input.Title, Worktree: input.Worktree}, nil
+		return zellij.Result{Action: zellij.Focused, Title: input.Title, Cwd: input.Cwd}, nil
 	}
 	tabs.titles[input.Title] = struct{}{}
-	return zellij.Result{Action: zellij.Created, Title: input.Title, Worktree: input.Worktree}, nil
+	return zellij.Result{Action: zellij.Created, Title: input.Title, Cwd: input.Cwd}, nil
 }
 
 func task5NewRepository(t *testing.T) string {

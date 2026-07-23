@@ -46,15 +46,15 @@ func NewSystemService() Service {
 
 func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (cli.Result, error) {
 	if err := zellij.Preflight(ctx, service.preflight); err != nil {
-		return cli.Result{}, err
+		return nil, err
 	}
 	home, present := service.env.Lookup(zellij.EnvironmentHome)
 	if !present || home == "" {
-		return cli.Result{}, errs.New(errs.Preflight, "HOME is not available")
+		return nil, errs.New(errs.Preflight, "HOME is not available")
 	}
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		return cli.Result{}, errs.Wrap(errs.External, "determine working directory", err)
+		return nil, errs.Wrap(errs.External, "determine working directory", err)
 	}
 	resolution, err := service.projects.Resolve(ctx, project.Request{
 		Home:             project.Directory(home),
@@ -62,17 +62,31 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 		WorkingDirectory: project.Directory(workingDirectory),
 	})
 	if err != nil {
-		return cli.Result{}, err
+		return nil, err
 	}
 
 	switch action := invocation.Action.(type) {
+	case cli.OpenProject:
+		tab, launchErr := service.tabs.Launch(ctx, zellij.Input{
+			Title: zellij.TabTitle(string(resolution.Key)),
+			Cwd:   zellij.Directory(resolution.ProjectRoot),
+		})
+		if launchErr != nil {
+			return nil, launchErr
+		}
+		return cli.OpenProjectResult{
+			ProjectRoot: string(resolution.ProjectRoot),
+			TabAction:   string(tab.Action),
+			TabTitle:    string(tab.Title),
+			TabCwd:      string(tab.Cwd),
+		}, nil
 	case cli.CheckoutExisting:
 		result, checkoutErr := service.branches.CheckoutExisting(ctx, app.CheckoutExistingInput{
 			Project: resolution,
 			Branch:  git.Branch(action.Branch),
 		})
 		if checkoutErr != nil {
-			return cli.Result{}, checkoutErr
+			return nil, checkoutErr
 		}
 		return branchResult(result), nil
 	case cli.CheckoutNew:
@@ -82,7 +96,7 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 			StartPoint: git.Commitish(action.StartPoint),
 		})
 		if checkoutErr != nil {
-			return cli.Result{}, checkoutErr
+			return nil, checkoutErr
 		}
 		return branchResult(result), nil
 	case cli.PullRequest:
@@ -91,29 +105,29 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 			Selector: github.PullRequestSelector(action.Selector),
 		})
 		if checkoutErr != nil {
-			return cli.Result{}, checkoutErr
+			return nil, checkoutErr
 		}
 		tab, launchErr := service.tabs.Launch(ctx, zellij.Input{
-			Title:    zellij.TabTitle(string(resolution.Key) + ":" + result.Display),
-			Worktree: zellij.WorktreePath(result.Worktree),
+			Title: zellij.TabTitle(string(resolution.Key) + ":" + result.Display),
+			Cwd:   zellij.Directory(result.Worktree),
 		})
 		if launchErr != nil {
-			return cli.Result{}, launchErr
+			return nil, launchErr
 		}
-		return cli.Result{
+		return cli.WorktreeResult{
 			Worktree:        string(result.Worktree),
 			DisplayIdentity: result.Display,
 			TabAction:       string(tab.Action),
 			TabTitle:        string(tab.Title),
-			TabWorktree:     string(tab.Worktree),
+			TabWorktree:     string(tab.Cwd),
 		}, nil
 	default:
-		return cli.Result{}, errs.New(errs.External, "unsupported CLI action")
+		return nil, errs.New(errs.External, "unsupported CLI action")
 	}
 }
 
-func branchResult(result app.CheckoutResult) cli.Result {
-	return cli.Result{
+func branchResult(result app.CheckoutResult) cli.WorktreeResult {
+	return cli.WorktreeResult{
 		Worktree:        string(result.Worktree),
 		DisplayIdentity: result.DisplayIdentity,
 		TabAction:       string(result.TabAction),

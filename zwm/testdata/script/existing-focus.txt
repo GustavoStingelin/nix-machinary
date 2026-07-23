@@ -1,10 +1,10 @@
 # Existing branch creation uses the real binary, real Git, and exact focus reuse.
 exec realgit -C $HOME/code/project branch feature/selected
-exec zwm -C project co feature/selected
+exec zwm -C project wco feature/selected
 cmpenv stdout created
 ! stderr .
 
-exec zwm -C project co feature/selected
+exec zwm -C project wco feature/selected
 cmpenv stdout focused
 ! stderr .
 

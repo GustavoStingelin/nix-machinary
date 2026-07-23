@@ -53,5 +53,5 @@ type CheckoutResult struct {
 	DisplayIdentity string
 	TabAction       zellij.Action
 	TabTitle        zellij.TabTitle
-	TabWorktree     zellij.WorktreePath
+	TabWorktree     zellij.Directory
 }

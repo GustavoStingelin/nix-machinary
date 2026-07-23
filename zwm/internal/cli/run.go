@@ -32,5 +32,8 @@ func Run(ctx context.Context, config Config) int {
 	if err := newCommand(config, parsed.invocation, &result).Run(ctx, parsed.frameworkArgs); err != nil {
 		return writeFailure(config.Stderr, err)
 	}
-	return writeResult(config.Stdout, result)
+	if err := writeResult(config.Stdout, result); err != nil {
+		return writeFailure(config.Stderr, err)
+	}
+	return 0
 }

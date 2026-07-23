@@ -47,11 +47,11 @@ type Output struct {
 
 type TabTitle string
 
-type WorktreePath string
+type Directory string
 
 type Input struct {
-	Title    TabTitle
-	Worktree WorktreePath
+	Title TabTitle
+	Cwd   Directory
 }
 
 type Action string
@@ -62,10 +62,10 @@ const (
 )
 
 type Result struct {
-	Action   Action
-	Title    TabTitle
-	Worktree WorktreePath
-	Output   Output
+	Action Action
+	Title  TabTitle
+	Cwd    Directory
+	Output Output
 }
 
 type CommandFailure struct {

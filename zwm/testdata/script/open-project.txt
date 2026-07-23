@@ -1,0 +1,144 @@
+# The compiled binary opens canonical roots without changing primary or linked Git state.
+cp seed-tabs $ZWM_TEST_TABS
+
+# Snapshot the attached primary worktree before bare, absolute, and relative opens.
+exec realgit -C $HOME/code/project rev-parse HEAD
+cp stdout primary-before-head
+exec realgit -C $HOME/code/project symbolic-ref -q HEAD
+cp stdout primary-before-symbolic
+exec realgit -C $HOME/code/project status --porcelain=v2 -z
+cp stdout primary-before-status
+exec realgit -C $HOME/code/project for-each-ref
+cp stdout primary-before-refs
+exec realgit -C $HOME/code/project worktree list --porcelain -z
+cp stdout primary-before-worktrees
+
+# A stale project:feature tab does not collide with the root project title.
+exec zwm o project
+cmpenv stdout primary-created
+! stderr .
+exec zwm o $HOME/code/project
+cmpenv stdout primary-focused
+! stderr .
+cd $HOME/code
+exec zwm o ./project
+cmpenv stdout $WORK/primary-focused
+! stderr .
+cd $WORK
+
+exec realgit -C $HOME/code/project rev-parse HEAD
+cmp stdout primary-before-head
+exec realgit -C $HOME/code/project symbolic-ref -q HEAD
+cmp stdout primary-before-symbolic
+exec realgit -C $HOME/code/project status --porcelain=v2 -z
+cmp stdout primary-before-status
+exec realgit -C $HOME/code/project for-each-ref
+cmp stdout primary-before-refs
+exec realgit -C $HOME/code/project worktree list --porcelain -z
+cmp stdout primary-before-worktrees
+
+# An external newline-containing project path remains a single argv value.
+exec zwm o $ZWM_TEST_NEWLINE_PROJECT
+cmpenv stdout newline-created
+! stderr .
+
+# A dirty linked worktree opens the canonical root while preserving both worktrees byte-for-byte.
+exec realgit -C $HOME/code/project worktree add --quiet -b feature/open-linked $WORK/open-linked
+cp dirty $WORK/open-linked/tracked.txt
+exec realgit -C $HOME/code/project rev-parse HEAD
+cp stdout linked-primary-before-head
+exec realgit -C $HOME/code/project symbolic-ref -q HEAD
+cp stdout linked-primary-before-symbolic
+exec realgit -C $HOME/code/project status --porcelain=v2 -z
+cp stdout linked-primary-before-status
+exec realgit -C $HOME/code/project for-each-ref
+cp stdout linked-primary-before-refs
+exec realgit -C $HOME/code/project worktree list --porcelain -z
+cp stdout linked-primary-before-worktrees
+exec realgit -C $WORK/open-linked rev-parse HEAD
+cp stdout linked-before-head
+exec realgit -C $WORK/open-linked symbolic-ref -q HEAD
+cp stdout linked-before-symbolic
+exec realgit -C $WORK/open-linked status --porcelain=v2 -z
+cp stdout linked-before-status
+exec realgit -C $WORK/open-linked for-each-ref
+cp stdout linked-before-refs
+exec realgit -C $WORK/open-linked worktree list --porcelain -z
+cp stdout linked-before-worktrees
+
+cd $WORK/open-linked
+exec zwm o .
+cmpenv stdout $WORK/linked-focused
+! stderr .
+cd $WORK
+
+exec realgit -C $HOME/code/project rev-parse HEAD
+cmp stdout linked-primary-before-head
+exec realgit -C $HOME/code/project symbolic-ref -q HEAD
+cmp stdout linked-primary-before-symbolic
+exec realgit -C $HOME/code/project status --porcelain=v2 -z
+cmp stdout linked-primary-before-status
+exec realgit -C $HOME/code/project for-each-ref
+cmp stdout linked-primary-before-refs
+exec realgit -C $HOME/code/project worktree list --porcelain -z
+cmp stdout linked-primary-before-worktrees
+exec realgit -C $WORK/open-linked rev-parse HEAD
+cmp stdout linked-before-head
+exec realgit -C $WORK/open-linked symbolic-ref -q HEAD
+cmp stdout linked-before-symbolic
+exec realgit -C $WORK/open-linked status --porcelain=v2 -z
+cmp stdout linked-before-status
+exec realgit -C $WORK/open-linked for-each-ref
+cmp stdout linked-before-refs
+exec realgit -C $WORK/open-linked worktree list --porcelain -z
+cmp stdout linked-before-worktrees
+assert-log $ZWM_TEST_LOG want-log
+
+-- seed-tabs --
+project:feature
+-- dirty --
+initial
+dirty
+-- primary-created --
+project_root=$HOME/code/project
+tab_action=created
+tab_title=project
+tab_cwd=$HOME/code/project
+-- primary-focused --
+project_root=$HOME/code/project
+tab_action=focused
+tab_title=project
+tab_cwd=$HOME/code/project
+-- newline-created --
+project_root=$WORK/external/newline
+project
+tab_action=created
+tab_title=$ZWM_TEST_NEWLINE_KEY
+tab_cwd=$WORK/external/newline
+project
+-- linked-focused --
+project_root=$HOME/code/project
+tab_action=focused
+tab_title=project
+tab_cwd=$HOME/code/project
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":4,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project","--cwd","$HOME/code/project"],"cwd":"$WORK"}
+{"sequence":5,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":6,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":7,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":8,"command":"zellij","args":["action","go-to-tab-name","project"],"cwd":"$WORK"}
+{"sequence":9,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":10,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":11,"command":"zellij","args":["action","query-tab-names"],"cwd":"$HOME/code"}
+{"sequence":12,"command":"zellij","args":["action","go-to-tab-name","project"],"cwd":"$HOME/code"}
+{"sequence":13,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":14,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$WORK/external/newline\nproject"}
+{"sequence":15,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":16,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","$ZWM_TEST_NEWLINE_KEY","--cwd","$WORK/external/newline\nproject"],"cwd":"$WORK"}
+{"sequence":17,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$WORK/open-linked"}
+{"sequence":18,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$WORK/open-linked"}
+{"sequence":19,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK/open-linked"}
+{"sequence":20,"command":"zellij","args":["action","go-to-tab-name","project"],"cwd":"$WORK/open-linked"}

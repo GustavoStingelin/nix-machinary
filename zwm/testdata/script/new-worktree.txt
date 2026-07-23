@@ -6,7 +6,7 @@ exec realgit -C $WORK/source status --porcelain=v1
 cp stdout before-status
 
 cd $WORK/source
-exec zwm co -b feature/new
+exec zwm wco -b feature/new
 cmpenv stdout $WORK/created
 ! stderr .
 

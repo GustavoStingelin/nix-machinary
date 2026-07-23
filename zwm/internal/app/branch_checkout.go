@@ -120,7 +120,7 @@ func (service BranchService) target(ctx context.Context, resolution project.Reso
 
 func (service BranchService) launch(ctx context.Context, resolution project.Resolution, branch git.Branch, path worktree.Path) (CheckoutResult, error) {
 	title := zellij.TabTitle(string(resolution.Key) + ":" + string(branch))
-	result, err := service.tabs.Launch(ctx, zellij.Input{Title: title, Worktree: zellij.WorktreePath(path)})
+	result, err := service.tabs.Launch(ctx, zellij.Input{Title: title, Cwd: zellij.Directory(path)})
 	if err != nil {
 		return CheckoutResult{}, err
 	}
@@ -129,7 +129,7 @@ func (service BranchService) launch(ctx context.Context, resolution project.Reso
 		DisplayIdentity: string(branch),
 		TabAction:       result.Action,
 		TabTitle:        title,
-		TabWorktree:     zellij.WorktreePath(path),
+		TabWorktree:     zellij.Directory(path),
 	}, nil
 }
 

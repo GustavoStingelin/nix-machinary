@@ -41,7 +41,7 @@ func checkoutResult(project branchProject, branch git.Branch, path string, actio
 		DisplayIdentity: string(branch),
 		TabAction:       action,
 		TabTitle:        title,
-		TabWorktree:     zellij.WorktreePath(path),
+		TabWorktree:     zellij.Directory(path),
 	}
 }
 
@@ -64,7 +64,7 @@ func expectNewPreparation(branchGit *mocks.MockBranchGit, project branchProject,
 
 func expectTabLaunch(tabs *mocks.MockTabLauncher, project branchProject, branch git.Branch, path string, action zellij.Action) {
 	title := zellij.TabTitle(string(project.Key) + ":" + string(branch))
-	tabs.EXPECT().Launch(mock.Anything, zellij.Input{Title: title, Worktree: zellij.WorktreePath(path)}).Return(zellij.Result{Action: action, Title: title, Worktree: zellij.WorktreePath(path)}, nil).Once()
+	tabs.EXPECT().Launch(mock.Anything, zellij.Input{Title: title, Cwd: zellij.Directory(path)}).Return(zellij.Result{Action: action, Title: title, Cwd: zellij.Directory(path)}, nil).Once()
 }
 
 func availableWorktrees(project branchProject) []byte {

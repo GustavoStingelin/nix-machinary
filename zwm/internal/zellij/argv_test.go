@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-func TestLaunch_preserves_spaces_and_newlines_in_title_layout_and_worktree_arguments(t *testing.T) {
+func TestLaunch_preserves_spaces_and_newlines_in_title_layout_and_cwd_arguments(t *testing.T) {
 	// Given
 	log := &callLog{}
 	input := Input{
-		Title:    TabTitle("project:feature with space\nand newline"),
-		Worktree: WorktreePath("/worktrees/feature with space\nand newline"),
+		Title: TabTitle("project:feature with space\nand newline"),
+		Cwd:   Directory("/worktrees/feature with space\nand newline"),
 	}
 	runner := &fakeRunner{
 		log: log,

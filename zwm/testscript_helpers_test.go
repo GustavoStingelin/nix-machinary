@@ -196,15 +196,23 @@ func fakeZellij() {
 			fmt.Fprintln(os.Stderr, "fake zellij: tab does not exist")
 			mainExit(4)
 		}
+		writeFakeZellijOutput()
 	case len(arguments) == 8 && slices.Equal(arguments[:2], []string{"action", "new-tab"}) && arguments[2] == "--layout" && arguments[4] == "--name" && arguments[6] == "--cwd":
 		if tabExists(arguments[5]) {
 			fmt.Fprintln(os.Stderr, "fake zellij: duplicate tab")
 			mainExit(1)
 		}
 		appendFile(os.Getenv("ZWM_TEST_TABS"), []byte(arguments[5]+"\n"))
+		writeFakeZellijOutput()
 	default:
 		fmt.Fprintln(os.Stderr, "fake zellij: unexpected command")
 		mainExit(64)
+	}
+}
+
+func writeFakeZellijOutput() {
+	if output := os.Getenv("ZWM_TEST_ZELLIJ_OUTPUT"); output != "" {
+		fmt.Fprint(os.Stdout, output)
 	}
 }
 

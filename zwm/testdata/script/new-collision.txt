@@ -1,6 +1,6 @@
 # A local new-branch collision remains a usage error with no worktree add or tab action.
 exec realgit -C $HOME/code/project branch feature/collision
-assert-exit 64 zwm -C project co -b feature/collision
+assert-exit 64 zwm -C project wco -b feature/collision
 stderr '^zwm: usage: local branch .feature/collision. already exists\n$'
 assert-log $ZWM_TEST_LOG want-log
 

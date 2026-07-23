@@ -8,10 +8,85 @@ import (
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/errs"
 )
 
+func TestLaunch_characterizes_exact_create_and_focus_argv(t *testing.T) {
+	tests := []struct {
+		name     string
+		tabNames string
+		want     Command
+	}{
+		{
+			name:     "create",
+			tabNames: "another-tab\n",
+			want: Command{Name: CommandZellij, Args: []string{
+				"action", "new-tab",
+				"--layout", "/home/tester/.config/zellij/layouts/worktree.kdl",
+				"--name", "project:feature",
+				"--cwd", "/worktrees/feature",
+			}},
+		},
+		{
+			name:     "focus",
+			tabNames: "another-tab\nproject:feature\n",
+			want:     Command{Name: CommandZellij, Args: []string{"action", "go-to-tab-name", "project:feature"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Given
+			log := &callLog{}
+			runner := &fakeRunner{log: log, responses: []runResponse{{output: Output{Stdout: test.tabNames}}, {}}}
+			environment := fakeEnvironment{log: log, values: map[EnvironmentVariable]string{
+				EnvironmentZellij: "session-1",
+				EnvironmentHome:   "/home/tester",
+			}}
+
+			// When
+			_, err := Launch(context.Background(), Config{Runner: runner, Environment: environment}, Input{
+				Title: TabTitle("project:feature"),
+				Cwd:   Directory("/worktrees/feature"),
+			})
+
+			// Then
+			if err != nil {
+				t.Fatalf("launch: %v", err)
+			}
+			assertEqual(t, test.want, runner.commands[1])
+			t.Logf("literal command array: %#v", test.want)
+		})
+	}
+}
+
+func TestLaunch_creates_tab_with_ordinary_project_cwd(t *testing.T) {
+	// Given
+	log := &callLog{}
+	input := Input{Title: TabTitle("project"), Cwd: Directory("/projects/ordinary root")}
+	runner := &fakeRunner{log: log, responses: []runResponse{{output: Output{}}, {output: Output{Stderr: "created\n"}}}}
+	environment := fakeEnvironment{log: log, values: map[EnvironmentVariable]string{
+		EnvironmentZellij: "session-1",
+		EnvironmentHome:   "/home/tester",
+	}}
+
+	// When
+	result, err := Launch(context.Background(), Config{Runner: runner, Environment: environment}, input)
+
+	// Then
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	assertEqual(t, Result{Action: Created, Title: input.Title, Cwd: input.Cwd, Output: Output{Stderr: "created\n"}}, result)
+	assertEqual(t, Command{Name: CommandZellij, Args: []string{
+		"action", "new-tab",
+		"--layout", "/home/tester/.config/zellij/layouts/worktree.kdl",
+		"--name", "project",
+		"--cwd", "/projects/ordinary root",
+	}}, runner.commands[1])
+}
+
 func TestLaunch_focuses_existing_exact_tab_name_when_current_session_lists_title(t *testing.T) {
 	// Given
 	log := &callLog{}
-	input := Input{Title: TabTitle("project:feature with space"), Worktree: WorktreePath("/worktrees/feature with space")}
+	input := Input{Title: TabTitle("project:feature with space"), Cwd: Directory("/worktrees/feature with space")}
 	runner := &fakeRunner{
 		log: log,
 		responses: []runResponse{
@@ -31,7 +106,7 @@ func TestLaunch_focuses_existing_exact_tab_name_when_current_session_lists_title
 	if err != nil {
 		t.Fatalf("launch: %v", err)
 	}
-	assertEqual(t, Result{Action: Focused, Title: input.Title, Worktree: input.Worktree, Output: Output{Stdout: "focused\n"}}, result)
+	assertEqual(t, Result{Action: Focused, Title: input.Title, Cwd: input.Cwd, Output: Output{Stdout: "focused\n"}}, result)
 	assertEqual(t, []Command{
 		{Name: CommandZellij, Args: []string{"action", "query-tab-names"}},
 		{Name: CommandZellij, Args: []string{"action", "go-to-tab-name", "project:feature with space"}},
@@ -49,11 +124,11 @@ func TestLaunch_focuses_existing_exact_tab_name_when_current_session_lists_title
 func TestLaunch_creates_tab_when_current_session_has_only_prefix_or_suffix_matches(t *testing.T) {
 	// Given
 	log := &callLog{}
-	input := Input{Title: TabTitle("project:feature"), Worktree: WorktreePath("/worktrees/feature")}
+	input := Input{Title: TabTitle("project"), Cwd: Directory("/projects/project")}
 	runner := &fakeRunner{
 		log: log,
 		responses: []runResponse{
-			{output: Output{Stdout: "project:feature-extra\nother-project:feature\n"}},
+			{output: Output{Stdout: "project:feature\nother-project\nproject-suffix\n"}},
 			{output: Output{Stderr: "created\n"}},
 		},
 	}
@@ -72,16 +147,38 @@ func TestLaunch_creates_tab_when_current_session_has_only_prefix_or_suffix_match
 	if err != nil {
 		t.Fatalf("launch: %v", err)
 	}
-	assertEqual(t, Result{Action: Created, Title: input.Title, Worktree: input.Worktree, Output: Output{Stderr: "created\n"}}, result)
+	assertEqual(t, Result{Action: Created, Title: input.Title, Cwd: input.Cwd, Output: Output{Stderr: "created\n"}}, result)
 	assertEqual(t, []Command{
 		{Name: CommandZellij, Args: []string{"action", "query-tab-names"}},
 		{Name: CommandZellij, Args: []string{
 			"action", "new-tab",
 			"--layout", "/home/tester/.config/zellij/layouts/worktree.kdl",
-			"--name", "project:feature",
-			"--cwd", "/worktrees/feature",
+			"--name", "project",
+			"--cwd", "/projects/project",
 		}},
 	}, runner.commands)
+}
+
+func TestLaunch_returns_typed_preflight_error_before_create_when_home_is_unavailable(t *testing.T) {
+	// Given
+	log := &callLog{}
+	runner := &fakeRunner{log: log, responses: []runResponse{{output: Output{Stdout: "another-tab\n"}}}}
+	environment := fakeEnvironment{
+		log:    log,
+		values: map[EnvironmentVariable]string{EnvironmentZellij: "session-1"},
+	}
+
+	// When
+	_, err := Launch(context.Background(), Config{Runner: runner, Environment: environment}, Input{
+		Title: TabTitle("project"),
+		Cwd:   Directory("/projects/project"),
+	})
+
+	// Then
+	if !errors.Is(err, errs.ErrPreflight) {
+		t.Fatalf("expected preflight class, got %v", err)
+	}
+	assertEqual(t, []Command{{Name: CommandZellij, Args: []string{"action", "query-tab-names"}}}, runner.commands)
 }
 
 func TestLaunch_retains_external_output_and_cause_when_zellij_action_fails(t *testing.T) {
@@ -142,8 +239,8 @@ func TestLaunch_retains_external_output_and_cause_when_zellij_action_fails(t *te
 
 			// When
 			_, err := Launch(context.Background(), Config{Runner: runner, Environment: environment}, Input{
-				Title:    TabTitle("project:feature"),
-				Worktree: WorktreePath("/worktrees/feature"),
+				Title: TabTitle("project:feature"),
+				Cwd:   Directory("/worktrees/feature"),
 			})
 
 			// Then

@@ -6,30 +6,32 @@ cmp stdout help
 assert-exit 64 zwm -C
 stderr '^zwm: usage: option .-C. requires a value\n$'
 
-assert-exit 64 zwm --project=project co feature/ready
+assert-exit 64 zwm --project=project wco feature/ready
 stderr '^zwm: usage: unknown global option .--project=project.\n$'
 
-assert-exit 64 zwm co --project project
-stderr '^zwm: usage: global option .--project. must appear before the subcommand\n$'
+assert-exit 64 zwm co topic
+stderr '^zwm: usage: unknown subcommand .co.\n$'
 
 env PATH=$WORK/empty
-assert-exit 69 $WORK/bin/zwm -C project co feature/ready
+assert-exit 69 $WORK/bin/zwm -C project wco feature/ready
 stderr '^zwm: preflight: required command .git. is not available\n$'
 assert-log $ZWM_TEST_LOG empty-log
 env PATH=$ZWM_TEST_PATH
 
 env ZELLIJ=
-assert-exit 69 zwm -C project co feature/ready
+assert-exit 69 zwm -C project wco feature/ready
 stderr '^zwm: preflight: must be run inside an existing Zellij session\n$'
 assert-log $ZWM_TEST_LOG empty-log
 
 -- help --
 Usage:
   zwm --help | -h
-  zwm [-C <name-or-path> | --project <name-or-path>] <command>
+  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}
+  zwm o <name-or-path>
 
 Commands:
-  co <branch> | co -b <new-branch> [<start-point>]
+  wco <branch> | wco -b <new-branch> [<start-point>]
+  o <name-or-path>
   pr <number|url|branch>
 
 Global options:

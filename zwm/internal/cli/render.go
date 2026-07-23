@@ -12,18 +12,34 @@ import (
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
 )
 
-func writeResult(writer io.Writer, result Result) int {
-	_, err := fmt.Fprintf(writer, "worktree_path=%s\ndisplay_identity=%s\ntab_action=%s\ntab_title=%s\ntab_worktree=%s\n",
-		result.Worktree,
-		result.DisplayIdentity,
-		result.TabAction,
-		result.TabTitle,
-		result.TabWorktree,
-	)
-	if err != nil {
-		return errs.ExitCode(errs.Wrap(errs.External, "write checkout result", err))
+func writeResult(writer io.Writer, result Result) error {
+	switch result := result.(type) {
+	case WorktreeResult:
+		_, err := fmt.Fprintf(writer, "worktree_path=%s\ndisplay_identity=%s\ntab_action=%s\ntab_title=%s\ntab_worktree=%s\n",
+			result.Worktree,
+			result.DisplayIdentity,
+			result.TabAction,
+			result.TabTitle,
+			result.TabWorktree,
+		)
+		if err != nil {
+			return errs.Wrap(errs.External, "write checkout result", err)
+		}
+		return nil
+	case OpenProjectResult:
+		_, err := fmt.Fprintf(writer, "project_root=%s\ntab_action=%s\ntab_title=%s\ntab_cwd=%s\n",
+			result.ProjectRoot,
+			result.TabAction,
+			result.TabTitle,
+			result.TabCwd,
+		)
+		if err != nil {
+			return errs.Wrap(errs.External, "write open project result", err)
+		}
+		return nil
+	default:
+		return errs.New(errs.External, "unsupported CLI result")
 	}
-	return 0
 }
 
 func writeFailure(writer io.Writer, err error) int {

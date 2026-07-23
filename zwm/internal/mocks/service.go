@@ -54,7 +54,9 @@ func (_mock *MockService) Execute(context1 context.Context, invocation cli.Invoc
 	if returnFunc, ok := ret.Get(0).(func(context.Context, cli.Invocation) cli.Result); ok {
 		r0 = returnFunc(context1, invocation)
 	} else {
-		r0 = ret.Get(0).(cli.Result)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(cli.Result)
+		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, cli.Invocation) error); ok {
 		r1 = returnFunc(context1, invocation)

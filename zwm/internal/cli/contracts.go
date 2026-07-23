@@ -21,13 +21,28 @@ type Invocation struct {
 	Action  Action
 }
 
-type Result struct {
+type Result interface {
+	result()
+}
+
+type WorktreeResult struct {
 	Worktree        string
 	DisplayIdentity string
 	TabAction       string
 	TabTitle        string
 	TabWorktree     string
 }
+
+func (WorktreeResult) result() {}
+
+type OpenProjectResult struct {
+	ProjectRoot string
+	TabAction   string
+	TabTitle    string
+	TabCwd      string
+}
+
+func (OpenProjectResult) result() {}
 
 // Action is one of the requests accepted by the zwm CLI.
 type Action interface {
@@ -55,6 +70,10 @@ type PullRequest struct {
 }
 
 func (PullRequest) action() {}
+
+type OpenProject struct{}
+
+func (OpenProject) action() {}
 
 // Service is the CLI-owned application seam for a parsed request.
 type Service interface {

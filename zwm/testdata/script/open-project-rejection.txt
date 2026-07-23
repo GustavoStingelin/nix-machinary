@@ -1,0 +1,17 @@
+# Strict open-project grammar and project rejection have no mutation-capable path.
+assert-exit 64 zwm o
+stderr '^zwm: usage: o requires a project name or path\n$'
+assert-log $ZWM_TEST_LOG empty-log
+
+assert-exit 64 zwm o project extra
+stderr '^zwm: usage: o accepts exactly one project name or path\n$'
+assert-log $ZWM_TEST_LOG empty-log
+
+mkdir $WORK/not-an-open-project
+assert-exit 65 zwm o $WORK/not-an-open-project
+stderr '^zwm: project: project .+ is not a Git worktree\n$'
+assert-log $ZWM_TEST_LOG want-log
+
+-- empty-log --
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$WORK/not-an-open-project"}

@@ -199,7 +199,40 @@
         zwm-all = pkgs.runCommand "zwm-all" {
           nativeBuildInputs = [ pkgs.zwm ];
         } ''
-          zwm --help >/dev/null
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+
+          zwm --help >"$workdir/help"
+          grep -Fqx '  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}' "$workdir/help"
+          grep -Fqx '  zwm o <name-or-path>' "$workdir/help"
+          grep -Fqx '  wco <branch> | wco -b <new-branch> [<start-point>]' "$workdir/help"
+          grep -Fqx '  o <name-or-path>' "$workdir/help"
+          grep -Fqx '  pr <number|url|branch>' "$workdir/help"
+          if grep -Eq '^  co([[:space:]]|$)|^  zwm co([[:space:]]|$)|^  zwm .*\{co([|}]|[[:space:]]|$)' "$workdir/help"; then
+            echo "zwm help advertises removed co command" >&2
+            exit 1
+          fi
+
+          assert_usage() {
+            expected="$1"
+            shift
+            if zwm "$@" >"$workdir/stdout" 2>"$workdir/stderr"; then
+              echo "zwm $* unexpectedly succeeded" >&2
+              exit 1
+            else
+              exit_code=$?
+            fi
+            test "$exit_code" -eq 64
+            test ! -s "$workdir/stdout"
+            printf 'zwm: usage: %s\n' "$expected" >"$workdir/expected"
+            cmp "$workdir/expected" "$workdir/stderr"
+          }
+
+          assert_usage "unknown subcommand 'co'" co topic
+          assert_usage "o requires a project name or path" o
+          assert_usage "o accepts exactly one project name or path" o repo extra
+          assert_usage "o does not accept -C/--project" -C selected o repo
+          assert_usage "global option '-C' must appear before the subcommand" o repo -C selected
           touch "$out"
         '';
       };

@@ -30,7 +30,7 @@ func TestScripts(t *testing.T) {
 
 func TestRealGit(t *testing.T) {
 	testscript.Run(t, testscript.Params{
-		Files:               []string{"testdata/script/real-git.txt"},
+		Files:               []string{"testdata/script/real-git.txt", "testdata/script/open-project.txt", "testdata/script/open-project-output.txt"},
 		RequireExplicitExec: true,
 		Setup:               setupScript,
 		Cmds:                scriptCommands(),

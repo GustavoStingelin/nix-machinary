@@ -1,5 +1,5 @@
 # The real binary creates a Git worktree and reports all five stable result lines.
-exec zwm -C project co feature/ready
+exec zwm -C project wco feature/ready
 cmpenv stdout result
 ! stderr .
 exec realgit -C $ZWM_TEST_EXISTING_PATH symbolic-ref --short HEAD

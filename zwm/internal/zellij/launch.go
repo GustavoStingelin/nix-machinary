@@ -34,7 +34,7 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 		if focusErr != nil {
 			return Result{}, externalFailure("focus Zellij tab", command, output, focusErr)
 		}
-		return Result{Action: Focused, Title: input.Title, Worktree: input.Worktree, Output: output}, nil
+		return Result{Action: Focused, Title: input.Title, Cwd: input.Cwd, Output: output}, nil
 	}
 
 	home, present := config.Environment.Lookup(EnvironmentHome)
@@ -48,14 +48,14 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 			"action", "new-tab",
 			"--layout", home + worktreeLayoutSuffix,
 			"--name", string(input.Title),
-			"--cwd", string(input.Worktree),
+			"--cwd", string(input.Cwd),
 		},
 	}
 	output, createErr := config.Runner.Run(ctx, command)
 	if createErr != nil {
 		return Result{}, externalFailure("create Zellij tab", command, output, createErr)
 	}
-	return Result{Action: Created, Title: input.Title, Worktree: input.Worktree, Output: output}, nil
+	return Result{Action: Created, Title: input.Title, Cwd: input.Cwd, Output: output}, nil
 }
 
 func hasExactTabName(tabNames string, title TabTitle) bool {

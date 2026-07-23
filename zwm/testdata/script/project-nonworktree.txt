@@ -1,6 +1,6 @@
 # An existing non-repository has a project error without raw Git stderr.
 mkdir $WORK/not-a-worktree
-assert-exit 65 zwm --project $WORK/not-a-worktree co feature/ready
+assert-exit 65 zwm --project $WORK/not-a-worktree wco feature/ready
 stderr '^zwm: project: project .+ is not a Git worktree\n$'
 assert-log $ZWM_TEST_LOG want-log
 

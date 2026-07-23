@@ -1,6 +1,6 @@
 # A failed Git add forwards raw stderr and does not launch a tab.
 env ZWM_TEST_GIT_FAILURE=worktree-add
-assert-exit 1 zwm -C project co feature/ready
+assert-exit 1 zwm -C project wco feature/ready
 stderr '^fake git: injected worktree add failure\nzwm: external: add existing branch worktree\n$'
 assert-log $ZWM_TEST_LOG want-log
 

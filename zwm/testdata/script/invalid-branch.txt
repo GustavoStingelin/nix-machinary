@@ -1,5 +1,5 @@
 # Validation errors retain the usage message without Git's suppressed validation stderr.
-assert-exit 64 zwm -C project co invalid..branch
+assert-exit 64 zwm -C project wco invalid..branch
 stderr '^zwm: usage: invalid branch .invalid..branch.\n$'
 assert-log $ZWM_TEST_LOG want-log
 

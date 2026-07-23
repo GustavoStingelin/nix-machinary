@@ -1,5 +1,5 @@
 # An external newline-containing project path resolves through real Git without breaking argv.
-exec zwm --project $ZWM_TEST_NEWLINE_PROJECT co feature/newline
+exec zwm --project $ZWM_TEST_NEWLINE_PROJECT wco feature/newline
 cmpenv stdout created
 ! stderr .
 assert-log $ZWM_TEST_LOG want-log

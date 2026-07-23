@@ -3,10 +3,12 @@ package cli
 // HelpText is the complete user-facing grammar for zwm.
 const HelpText = "Usage:\n" +
 	"  zwm --help | -h\n" +
-	"  zwm [-C <name-or-path> | --project <name-or-path>] <command>\n" +
+	"  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}\n" +
+	"  zwm o <name-or-path>\n" +
 	"\n" +
 	"Commands:\n" +
-	"  co <branch> | co -b <new-branch> [<start-point>]\n" +
+	"  wco <branch> | wco -b <new-branch> [<start-point>]\n" +
+	"  o <name-or-path>\n" +
 	"  pr <number|url|branch>\n" +
 	"\n" +
 	"Global options:\n" +

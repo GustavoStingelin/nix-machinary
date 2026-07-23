@@ -1,5 +1,5 @@
 # Project rejection has the documented exit code and reaches no mutation command.
-assert-exit 65 zwm --project $WORK/not-a-repository co feature/ready
+assert-exit 65 zwm --project $WORK/not-a-repository wco feature/ready
 stderr '^zwm: project: project .+ is not a Git worktree\n$'
 assert-log $ZWM_TEST_LOG empty-log
 

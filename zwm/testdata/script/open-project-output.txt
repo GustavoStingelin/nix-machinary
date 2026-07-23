@@ -1,0 +1,17 @@
+# A successful Zellij message cannot replace the stable open-project result.
+env ZWM_TEST_ZELLIJ_OUTPUT=misleading-success
+exec zwm o project
+cmpenv stdout created
+! stderr .
+assert-log $ZWM_TEST_LOG want-log
+
+-- created --
+project_root=$HOME/code/project
+tab_action=created
+tab_title=project
+tab_cwd=$HOME/code/project
+-- want-log --
+{"sequence":1,"command":"git","args":["rev-parse","--show-toplevel"],"cwd":"$HOME/code/project"}
+{"sequence":2,"command":"git","args":["worktree","list","--porcelain","-z"],"cwd":"$HOME/code/project"}
+{"sequence":3,"command":"zellij","args":["action","query-tab-names"],"cwd":"$WORK"}
+{"sequence":4,"command":"zellij","args":["action","new-tab","--layout","$HOME/.config/zellij/layouts/worktree.kdl","--name","project","--cwd","$HOME/code/project"],"cwd":"$WORK"}
