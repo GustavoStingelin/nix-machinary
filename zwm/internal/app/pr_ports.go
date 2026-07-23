@@ -51,5 +51,6 @@ type PullRequestResult struct {
 	Action   PullRequestAction
 	Branch   worktree.Branch
 	Display  string
+	Number   github.PullRequestNumber
 	Worktree worktree.Path
 }

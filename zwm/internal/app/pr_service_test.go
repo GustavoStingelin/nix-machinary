@@ -56,6 +56,9 @@ func TestCheckoutPR_creates_then_reuses_the_deterministic_managed_worktree_for_b
 	require.Equal(t, app.PullRequestCreated, created.Action)
 	require.Equal(t, app.PullRequestReused, byURL.Action)
 	require.Equal(t, app.PullRequestReused, byNumber.Action)
+	require.Equal(t, github.PullRequestNumber("123"), created.Number)
+	require.Equal(t, github.PullRequestNumber("123"), byURL.Number)
+	require.Equal(t, github.PullRequestNumber("123"), byNumber.Number)
 	require.Equal(t, worktree.Branch(expectedBranch(projectResolution, pullRequest)), created.Branch)
 	require.Equal(t, expectedPath(projectResolution, pullRequest), created.Worktree)
 	require.Equal(t, "pr-123-feature/pr-ready", created.Display)
@@ -81,6 +84,7 @@ func TestPullRequestService_preserves_unambiguous_identity_for_fork_metadata(t *
 
 	// Then
 	require.NoError(t, err)
+	require.Equal(t, github.PullRequestNumber("77"), result.Number)
 	require.Equal(t, "pr-77-fork/topic", result.Display)
 	require.Equal(t, expectedBranch(projectResolution, pullRequest), result.Branch)
 	require.Equal(t, expectedPath(projectResolution, pullRequest), result.Worktree)

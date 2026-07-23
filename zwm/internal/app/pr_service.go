@@ -41,7 +41,7 @@ func (service PullRequestService) Checkout(ctx context.Context, input PullReques
 	})
 	if branchExists {
 		if validation.Registration == worktree.RegistrationReusable && validation.Branch == worktree.BranchManaged {
-			return PullRequestResult{Action: PullRequestReused, Branch: branch, Display: display, Worktree: managedPath}, nil
+			return PullRequestResult{Action: PullRequestReused, Branch: branch, Display: display, Number: pullRequest.Number, Worktree: managedPath}, nil
 		}
 		return PullRequestResult{}, pullRequestError(errs.Usage, "local branch '"+string(branch)+"' already exists", nil, "")
 	}
@@ -72,7 +72,7 @@ func (service PullRequestService) Checkout(ctx context.Context, input PullReques
 	if err := service.verifyRegistration(ctx, input.Project.ProjectRoot, branch, managedPath); err != nil {
 		return PullRequestResult{}, pullRequestError(errs.External, "GitHub CLI did not register expected pull-request branch", err, managedPath)
 	}
-	return PullRequestResult{Action: PullRequestCreated, Branch: branch, Display: display, Worktree: managedPath}, nil
+	return PullRequestResult{Action: PullRequestCreated, Branch: branch, Display: display, Number: pullRequest.Number, Worktree: managedPath}, nil
 }
 
 func (service PullRequestService) verifyRegistration(ctx context.Context, repositoryPath project.Directory, branch worktree.Branch, managedPath worktree.Path) error {
