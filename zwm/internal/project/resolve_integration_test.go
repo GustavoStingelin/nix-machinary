@@ -40,7 +40,7 @@ func TestResolveProject_normalizesLinkedWorktreeAndPreservesDirtySource(t *testi
 	if result.Key != "project" {
 		t.Fatalf("key = %q, want project", result.Key)
 	}
-	if result.ManagedRoot != Directory(filepath.Join(canonicalDirectory(t, home), "code", ".worktrees", "project")) {
+	if result.ManagedRoot != Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", "project")) {
 		t.Fatalf("managed root = %q", result.ManagedRoot)
 	}
 	assertSourceUnchanged(t, before, primary)
@@ -113,6 +113,10 @@ func TestResolveProject_sanitizesExternalBasenamesWithoutRejectingControlBytes(t
 	controlWant := Key("unsafe-project-" + shortCanonicalHash(t, control))
 	if controlResult.Key != controlWant {
 		t.Fatalf("control key = %q, want %q", controlResult.Key, controlWant)
+	}
+	wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", string(controlWant)))
+	if controlResult.ManagedRoot != wantManaged {
+		t.Fatalf("control managed root = %q, want %q", controlResult.ManagedRoot, wantManaged)
 	}
 }
 

@@ -71,7 +71,7 @@ func TestResolveProject_retainsRawDirectKeys_whenBareValuesAreSafe(t *testing.T)
 			if result.Key != test.key {
 				t.Fatalf("key = %q, want %q", result.Key, test.key)
 			}
-			wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".worktrees", string(test.key)))
+			wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", string(test.key)))
 			if result.ManagedRoot != wantManaged {
 				t.Fatalf("managed root = %q, want %q", result.ManagedRoot, wantManaged)
 			}
@@ -184,6 +184,10 @@ func TestResolveProject_derivesStableExternalKey_whenBasenameRequiresSanitizing(
 	if first.Key != wantKey || second.Key != wantKey {
 		t.Fatalf("keys = %q / %q, want %q", first.Key, second.Key, wantKey)
 	}
+	wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", string(wantKey)))
+	if first.ManagedRoot != wantManaged {
+		t.Fatalf("managed root = %q, want %q", first.ManagedRoot, wantManaged)
+	}
 	if first != second {
 		t.Fatalf("repeated resolution was unstable: %+v / %+v", first, second)
 	}
@@ -213,6 +217,40 @@ func TestResolveProject_usesProjectFallback_whenExternalBasenameHasNoASCIIAlphan
 	want := Key("project-" + hex.EncodeToString(sum[:])[:8])
 	if result.Key != want {
 		t.Fatalf("key = %q, want %q", result.Key, want)
+	}
+	wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", string(want)))
+	if result.ManagedRoot != wantManaged {
+		t.Fatalf("managed root = %q, want %q", result.ManagedRoot, wantManaged)
+	}
+}
+
+func TestResolveProject_treatsLegacyWorktreesDirectoryAsOrdinaryProjectPath(t *testing.T) {
+	// Given
+	home := filepath.Join(t.TempDir(), "home")
+	projectRoot := filepath.Join(home, "code", ".worktrees", "legacy-project")
+	makeDirectory(t, projectRoot)
+	resolver := NewResolver(identityRepository{})
+
+	// When
+	result, err := resolver.Resolve(context.Background(), Request{
+		Home:             Directory(home),
+		Project:          Value(projectRoot),
+		WorkingDirectory: Directory(t.TempDir()),
+	})
+
+	// Then
+	if err != nil {
+		t.Fatalf("resolve legacy worktrees project: %v", err)
+	}
+	canonical := canonicalDirectory(t, projectRoot)
+	sum := sha256.Sum256([]byte(canonical))
+	wantKey := Key("legacy-project-" + hex.EncodeToString(sum[:])[:8])
+	wantManaged := Directory(filepath.Join(canonicalDirectory(t, home), "code", ".wt", string(wantKey)))
+	if result.Key != wantKey {
+		t.Fatalf("key = %q, want %q", result.Key, wantKey)
+	}
+	if result.ManagedRoot != wantManaged {
+		t.Fatalf("managed root = %q, want %q", result.ManagedRoot, wantManaged)
 	}
 }
 

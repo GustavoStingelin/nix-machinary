@@ -68,6 +68,7 @@ func TestServiceExecute_uses_concise_pull_request_tab_title_when_head_ref_is_lon
 	// Then
 	require.NoError(t, createErr)
 	require.NoError(t, reuseErr)
+	require.Equal(t, filepath.Join(home, "code", ".wt", "loop", "pr-1185"), string(git.addCalls[0]))
 	require.Equal(t, []zellij.Input{
 		{Title: zellij.TabTitle("loop:pr-1185"), Cwd: zellij.Directory(git.addCalls[0])},
 		{Title: zellij.TabTitle("loop:pr-1185"), Cwd: zellij.Directory(git.addCalls[0])},

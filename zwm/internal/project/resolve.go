@@ -39,9 +39,9 @@ func (resolver Resolver) Resolve(ctx context.Context, request Request) (Resoluti
 		return Resolution{}, errs.Wrap(errs.Project, fmt.Sprintf("home directory '%s' is not available", request.Home), err)
 	}
 	codeRoot := canonicalCodeRoot(home)
-	managedRootsRoot := filepath.Join(codeRoot, ".worktrees")
+	managedRootsRoot := filepath.Join(codeRoot, ".wt")
 	if pathsOverlap(string(projectRoot), managedRootsRoot) {
-		return Resolution{}, errs.New(errs.Project, fmt.Sprintf("project '%s' conflicts with managed worktree roots", projectRoot))
+		return Resolution{}, errs.New(errs.Project, fmt.Sprintf("project '%s' conflicts with managed worktree root '%s'", projectRoot, managedRootsRoot))
 	}
 
 	key, err := deriveKey(projectRoot, codeRoot)

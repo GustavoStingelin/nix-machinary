@@ -19,8 +19,9 @@ func (service PullRequestService) Checkout(ctx context.Context, input PullReques
 	}
 
 	display := "pr-" + string(pullRequest.Number) + "-" + string(pullRequest.HeadRefName)
+	pathIdentity := "pr-" + string(pullRequest.Number)
 	branch := pullRequestBranch(input.Project, pullRequest)
-	managedPath := worktree.ManagedWorktreePath(worktree.Path(input.Project.ManagedRoot), display)
+	managedPath := worktree.ManagedWorktreePath(worktree.Path(input.Project.ManagedRoot), pathIdentity)
 	branchExists, err := service.git.LocalBranchExists(ctx, input.Project.ProjectRoot, branch)
 	if err != nil {
 		return PullRequestResult{}, pullRequestError(errs.External, "could not inspect local pull request branch", err, "")

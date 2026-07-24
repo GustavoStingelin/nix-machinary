@@ -2,6 +2,8 @@ package worktree_test
 
 import (
 	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/worktree"
@@ -144,22 +146,58 @@ func TestValidateTarget_classifies_every_registration_and_checkout_state_when_re
 	}
 }
 
-func TestManagedWorktreePath_sanitizes_and_hashes_identity_deterministically(t *testing.T) {
+func TestManagedWorktreePath_builds_concise_leaf_when_identity_fits_limit(t *testing.T) {
 	// Given
 	root := worktree.Path("/managed root/project")
+	tests := []struct {
+		name     string
+		identity string
+		wantLeaf string
+	}{
+		{name: "short branch", identity: "mau", wantLeaf: "mau"},
+		{name: "slash and space branch", identity: "feature/ready now", wantLeaf: "feature-ready-now"},
+		{name: "numeric pull request", identity: "pr-1185", wantLeaf: "pr-1185"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// When
+			path := worktree.ManagedWorktreePath(root, test.identity)
+
+			// Then
+			require.Equal(t, worktree.Path(filepath.Join(string(root), test.wantLeaf)), path)
+		})
+	}
+}
+
+func TestManagedWorktreePath_suffixes_cropped_leaf_deterministically_when_identity_exceeds_limit(t *testing.T) {
+	// Given
+	root := worktree.Path("/managed root/project")
+	sharedPrefix := "feature/" + strings.Repeat("shared-prefix-", 8)
+	firstBranch := sharedPrefix + "first"
+	secondBranch := sharedPrefix + "second"
 
 	// When
-	path := worktree.ManagedWorktreePath(root, "feature/with-slash")
+	firstPath := worktree.ManagedWorktreePath(root, firstBranch)
+	secondPath := worktree.ManagedWorktreePath(root, secondBranch)
+	firstLeaf := filepath.Base(string(firstPath))
+	secondLeaf := filepath.Base(string(secondPath))
 
 	// Then
-	require.Equal(t, worktree.Path("/managed root/project/feature-with-slash-95ec24a1"), path)
+	require.LessOrEqual(t, len(firstLeaf), 64)
+	require.LessOrEqual(t, len(secondLeaf), 64)
+	require.True(t, strings.HasPrefix(firstLeaf, "feature-shared-prefix"))
+	require.True(t, strings.HasPrefix(secondLeaf, "feature-shared-prefix"))
+	require.NotEqual(t, firstLeaf, secondLeaf)
+	require.Equal(t, firstPath, worktree.ManagedWorktreePath(root, firstBranch))
+	require.Equal(t, secondPath, worktree.ManagedWorktreePath(root, secondBranch))
+}
+
+func TestManagedDisplay_and_identity_hash_remain_stable_for_output_identity_helpers(t *testing.T) {
+	// Then
 	require.Equal(t, "feature-with-slash", worktree.ManagedDisplay("feature/with-slash"))
 	require.Equal(t, "project", worktree.ManagedDisplay(" \n///\t"))
 	require.Equal(t, "95ec24a1ed17ada53f3aaa002f81d2ca38bfdde5b28a3c408e7603fd7155f26b", worktree.IdentityHash("feature/with-slash"))
-	require.NotEqual(t,
-		worktree.ManagedWorktreePath(root, "feature/with-slash"),
-		worktree.ManagedWorktreePath(root, "feature-with-slash"),
-	)
 }
 
 func TestValidation_retains_typed_invalid_target_error_when_combination_is_rejected(t *testing.T) {

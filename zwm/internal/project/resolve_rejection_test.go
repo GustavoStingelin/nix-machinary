@@ -79,8 +79,8 @@ func TestResolveProject_rejectsEveryManagedRootOverlapWithoutChangingRepositorie
 		name        string
 		projectPath func(string) string
 	}{
-		{name: "managed root", projectPath: func(home string) string { return filepath.Join(home, "code", ".worktrees") }},
-		{name: "managed child", projectPath: func(home string) string { return filepath.Join(home, "code", ".worktrees", "nested") }},
+		{name: "managed root", projectPath: func(home string) string { return filepath.Join(home, "code", ".wt") }},
+		{name: "managed child", projectPath: func(home string) string { return filepath.Join(home, "code", ".wt", "nested") }},
 		{name: "managed ancestor", projectPath: func(home string) string { return filepath.Join(home, "code") }},
 	}
 
@@ -103,6 +103,9 @@ func TestResolveProject_rejectsEveryManagedRootOverlapWithoutChangingRepositorie
 			// Then
 			if !errors.Is(err, errs.ErrProject) {
 				t.Fatalf("error = %v, want project class", err)
+			}
+			if err.Error() != "project '"+canonicalDirectory(t, projectRoot)+"' conflicts with managed worktree root '"+filepath.Join(canonicalDirectory(t, home), "code", ".wt")+"'" {
+				t.Fatalf("error = %q, want .wt namespace cited", err)
 			}
 			assertSourceUnchanged(t, before, projectRoot)
 		})

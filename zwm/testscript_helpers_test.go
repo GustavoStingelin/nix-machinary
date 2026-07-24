@@ -54,7 +54,7 @@ func setupScript(env *testscript.Env) error {
 		return err
 	}
 
-	managedRoot := filepath.Join(home, "code", ".worktrees", "project")
+	managedRoot := filepath.Join(home, "code", ".wt", "project")
 	newlineKey := externalKey(newlineProjectPath)
 	env.Setenv("HOME", home)
 	env.Setenv("PATH", filepath.Dir(binaryPath)+string(os.PathListSeparator)+env.Getenv("PATH"))
@@ -69,10 +69,10 @@ func setupScript(env *testscript.Env) error {
 	env.Setenv("ZWM_TEST_NEW_PATH", string(worktree.ManagedWorktreePath(worktree.Path(managedRoot), "feature/new")))
 	env.Setenv("ZWM_TEST_NEWLINE_PROJECT", newlineProjectPath)
 	env.Setenv("ZWM_TEST_NEWLINE_KEY", newlineKey)
-	env.Setenv("ZWM_TEST_NEWLINE_PATH", string(worktree.ManagedWorktreePath(worktree.Path(filepath.Join(home, "code", ".worktrees", newlineKey)), "feature/newline")))
-	env.Setenv("ZWM_TEST_PR_PATH", string(worktree.ManagedWorktreePath(worktree.Path(managedRoot), "pr-123-feature/pr-ready")))
+	env.Setenv("ZWM_TEST_NEWLINE_PATH", string(worktree.ManagedWorktreePath(worktree.Path(filepath.Join(home, "code", ".wt", newlineKey)), "feature/newline")))
+	env.Setenv("ZWM_TEST_PR_PATH", string(worktree.ManagedWorktreePath(worktree.Path(managedRoot), "pr-123")))
 	env.Setenv("ZWM_TEST_PR_BRANCH", pullRequestBranch(projectPath, "123", "feature/pr-ready"))
-	env.Setenv("ZWM_TEST_FAILURE_PR_PATH", string(worktree.ManagedWorktreePath(worktree.Path(managedRoot), "pr-456-feature/failure")))
+	env.Setenv("ZWM_TEST_FAILURE_PR_PATH", string(worktree.ManagedWorktreePath(worktree.Path(managedRoot), "pr-456")))
 	env.Setenv("ZWM_TEST_FAILURE_PR_BRANCH", pullRequestBranch(projectPath, "456", "feature/failure"))
 	return nil
 }

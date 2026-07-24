@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/app"
@@ -23,6 +24,7 @@ func TestCheckoutPR_realGit_creates_and_reuses_for_branch_url_and_number_selecto
 	require.Equal(t, app.PullRequestCreated, created.Action)
 	require.Equal(t, expectedBranch(fixture.project, pullRequest), created.Branch)
 	require.Equal(t, expectedPath(fixture.project, pullRequest), created.Worktree)
+	require.Equal(t, filepath.Join(string(fixture.project.ManagedRoot), "pr-123"), string(created.Worktree))
 	require.Equal(t, "pr-123-feature/pr-ready", created.Display)
 	require.Equal(t, string(created.Branch), symbolicHead(t, string(created.Worktree)))
 	require.Equal(t, fixture.prCommit, string(runGit(t, string(created.Worktree), "rev-parse", "HEAD"))[:40])

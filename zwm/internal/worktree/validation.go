@@ -31,6 +31,8 @@ const (
 	BranchInvalid      BranchState = "invalid"
 )
 
+const managedWorktreeLeafLimit = 64
+
 type TargetInput struct {
 	Branch       Branch
 	ManagedPath  Path
@@ -109,7 +111,13 @@ func IdentityHash(identity string) string {
 }
 
 func ManagedWorktreePath(root Path, identity string) Path {
-	return Path(filepath.Join(string(root), ManagedDisplay(identity)+"-"+IdentityHash(identity)[:8]))
+	leaf := ManagedDisplay(identity)
+	if len(leaf) <= managedWorktreeLeafLimit {
+		return Path(filepath.Join(string(root), leaf))
+	}
+	suffix := IdentityHash(identity)[:8]
+	croppedLength := managedWorktreeLeafLimit - len(suffix) - 1
+	return Path(filepath.Join(string(root), leaf[:croppedLength]+"-"+suffix))
 }
 
 func classifyRegistration(input TargetInput) RegistrationState {

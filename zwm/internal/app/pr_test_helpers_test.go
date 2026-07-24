@@ -78,7 +78,7 @@ func pullRequestProject(t *testing.T) project.Resolution {
 	t.Helper()
 
 	root := t.TempDir()
-	managedRoot := filepath.Join(root, ".worktrees", "project")
+	managedRoot := filepath.Join(root, ".wt", "project")
 	return project.Resolution{
 		InvocationWorktree: project.Directory(filepath.Join(root, "source")),
 		ProjectRoot:        project.Directory(filepath.Join(root, "project")),
@@ -104,7 +104,7 @@ func expectedBranch(projectResolution project.Resolution, pullRequest github.Pul
 }
 
 func expectedPath(projectResolution project.Resolution, pullRequest github.PullRequest) worktree.Path {
-	identity := "pr-" + string(pullRequest.Number) + "-" + string(pullRequest.HeadRefName)
+	identity := "pr-" + string(pullRequest.Number)
 	return worktree.ManagedWorktreePath(worktree.Path(projectResolution.ManagedRoot), identity)
 }
 

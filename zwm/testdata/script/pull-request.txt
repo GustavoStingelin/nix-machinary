@@ -1,5 +1,4 @@
 # PR creation accepts a selector, preserves raw failure stderr, and retains recovery.
-exec realgit -C $HOME/code/project branch zwt/pr-123-legacy
 exec zwm -C project pr 123
 cmpenv stdout created
 ! stderr .

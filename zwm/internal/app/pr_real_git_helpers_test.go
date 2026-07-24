@@ -72,7 +72,7 @@ func newRealPullRequestFixture(t *testing.T) realPullRequestFixture {
 	return realPullRequestFixture{
 		project: project.Resolution{
 			InvocationWorktree: project.Directory(source),
-			ManagedRoot:        project.Directory(filepath.Join(root, "code", ".worktrees", "project")),
+			ManagedRoot:        project.Directory(filepath.Join(root, "code", ".wt", "project")),
 			ProjectRoot:        project.Directory(primary),
 		},
 		primary:  primary,

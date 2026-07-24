@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCheckoutExisting_realGit_creates_and_reuses_managed_slash_branch_without_changing_dirty_source(t *testing.T) {
+func TestCheckoutExisting_realGit_creates_and_reuses_mau_without_hash_or_changing_dirty_source(t *testing.T) {
 	repository := task5NewRepository(t)
-	branch := git.Branch("feature/with-slash")
+	branch := git.Branch("mau")
 	task5Git(t, repository, "branch", string(branch))
 	require.NoError(t, os.WriteFile(filepath.Join(repository, "tracked.txt"), []byte("initial\ndirty\n"), 0o600))
 	before := task5SnapshotSource(t, repository)
@@ -29,6 +29,7 @@ func TestCheckoutExisting_realGit_creates_and_reuses_managed_slash_branch_withou
 	require.NoError(t, err)
 	require.Equal(t, zellij.Created, created.TabAction)
 	require.Equal(t, path, string(created.Worktree))
+	require.Equal(t, filepath.Join(string(project.ManagedRoot), "mau"), string(created.Worktree))
 	require.Equal(t, string(branch), strings.TrimSpace(string(task5Git(t, path, "symbolic-ref", "--short", "HEAD"))))
 	task5RequireSourceContentAndStatus(t, before, repository)
 	afterCreate := task5SnapshotSource(t, repository)
@@ -36,6 +37,7 @@ func TestCheckoutExisting_realGit_creates_and_reuses_managed_slash_branch_withou
 	reused, err := service.CheckoutExisting(context.Background(), app.CheckoutExistingInput{Project: project, Branch: branch})
 	require.NoError(t, err)
 	require.Equal(t, zellij.Focused, reused.TabAction)
+	require.Equal(t, created.Worktree, reused.Worktree)
 	require.Equal(t, afterCreate, task5SnapshotSource(t, repository))
 }
 
@@ -77,15 +79,19 @@ func TestCheckoutNew_realGit_uses_linked_source_head_and_explicit_commitishes(t 
 	task5RequireSourceContentAndStatus(t, before, source)
 }
 
-func TestCheckoutNew_realGit_uses_distinct_managed_paths_when_displays_collide(t *testing.T) {
+func TestCheckoutNew_realGit_uses_distinct_managed_paths_when_cropped_prefixes_collide(t *testing.T) {
 	repository := task5NewRepository(t)
 	project := task5Project(t, repository, repository)
 	service := app.NewBranchService(git.NewClient(git.Config{}), &task5Tabs{})
+	sharedPrefix := "collision/" + strings.Repeat("shared-prefix-", 8)
 
-	first, err := service.CheckoutNew(context.Background(), app.CheckoutNewInput{Project: project, Branch: "collision/a"})
+	first, err := service.CheckoutNew(context.Background(), app.CheckoutNewInput{Project: project, Branch: git.Branch(sharedPrefix + "first")})
 	require.NoError(t, err)
-	second, err := service.CheckoutNew(context.Background(), app.CheckoutNewInput{Project: project, Branch: "collision-a"})
+	second, err := service.CheckoutNew(context.Background(), app.CheckoutNewInput{Project: project, Branch: git.Branch(sharedPrefix + "second")})
 	require.NoError(t, err)
 	require.NotEqual(t, first.Worktree, second.Worktree)
-	require.Equal(t, worktree.ManagedDisplay("collision/a"), worktree.ManagedDisplay("collision-a"))
+	require.LessOrEqual(t, len(filepath.Base(string(first.Worktree))), 64)
+	require.LessOrEqual(t, len(filepath.Base(string(second.Worktree))), 64)
+	require.Equal(t, string(sharedPrefix+"first"), strings.TrimSpace(string(task5Git(t, string(first.Worktree), "symbolic-ref", "--short", "HEAD"))))
+	require.Equal(t, string(sharedPrefix+"second"), strings.TrimSpace(string(task5Git(t, string(second.Worktree), "symbolic-ref", "--short", "HEAD"))))
 }

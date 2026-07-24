@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/app"
@@ -62,6 +63,7 @@ func TestCheckoutPR_creates_then_reuses_the_deterministic_managed_worktree_for_b
 	require.Equal(t, worktree.Branch(expectedBranch(projectResolution, pullRequest)), created.Branch)
 	require.Equal(t, expectedPath(projectResolution, pullRequest), created.Worktree)
 	require.Equal(t, "pr-123-feature/pr-ready", created.Display)
+	require.Equal(t, worktree.Path(filepath.Join(string(projectResolution.ManagedRoot), "pr-123")), created.Worktree)
 	require.Equal(t, []worktree.Path{expectedPath(projectResolution, pullRequest)}, git.addCalls)
 	require.Equal(t, []github.Branch{github.Branch(expectedBranch(projectResolution, pullRequest))}, gateway.checkoutBranches)
 	require.Equal(t, []github.PullRequestSelector{"feature/pr-ready", "https://github.com/example/project/pull/123", "123"}, gateway.resolveSelectors)
@@ -88,6 +90,7 @@ func TestPullRequestService_preserves_unambiguous_identity_for_fork_metadata(t *
 	require.Equal(t, "pr-77-fork/topic", result.Display)
 	require.Equal(t, expectedBranch(projectResolution, pullRequest), result.Branch)
 	require.Equal(t, expectedPath(projectResolution, pullRequest), result.Worktree)
+	require.Equal(t, worktree.Path(filepath.Join(string(projectResolution.ManagedRoot), "pr-77")), result.Worktree)
 }
 
 func TestPullRequestService_rejects_a_new_namespace_collision_without_add_or_checkout(t *testing.T) {

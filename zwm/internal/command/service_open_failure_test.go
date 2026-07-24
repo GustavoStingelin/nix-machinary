@@ -59,7 +59,7 @@ func TestServiceExecute_returns_project_failure_for_non_worktree_before_open_lau
 func TestServiceExecute_returns_project_failure_for_managed_root_overlap_before_open_launch(t *testing.T) {
 	// Given
 	home := canonicalTestDirectory(t, t.TempDir())
-	projectRoot := filepath.Join(home, "code", ".worktrees", "nested-project")
+	projectRoot := filepath.Join(home, "code", ".wt", "nested-project")
 	require.NoError(t, os.MkdirAll(projectRoot, 0o755))
 	repository := &serviceTestRepository{
 		worktreeRoot: project.Directory(projectRoot),
