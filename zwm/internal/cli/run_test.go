@@ -106,6 +106,22 @@ func runCLI(t *testing.T, service Service, args ...string) (int, string, string)
 	return exitCode, stdout.String(), stderr.String()
 }
 
+func runCLIWithCompleter(t *testing.T, completer Completer, args ...string) (int, string, string) {
+	t.Helper()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+	exitCode := Run(context.Background(), Config{
+		Arguments: args,
+		Service:   &recordingService{},
+		Completer: completer,
+		Stdout:    &stdout,
+		Stderr:    &stderr,
+	})
+
+	return exitCode, stdout.String(), stderr.String()
+}
+
 type recordingService struct {
 	invocations []Invocation
 	result      Result

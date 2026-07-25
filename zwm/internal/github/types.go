@@ -15,6 +15,12 @@ type PullRequest struct {
 	HeadRefName HeadRefName
 }
 
+// PullRequestSummary describes an open pull request for shell completion.
+type PullRequestSummary struct {
+	Number PullRequestNumber
+	Title  string
+}
+
 type CheckoutRequest struct {
 	Directory Directory
 	Selector  PullRequestSelector

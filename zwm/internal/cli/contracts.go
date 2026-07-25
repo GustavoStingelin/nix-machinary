@@ -79,3 +79,16 @@ func (OpenProject) action() {}
 type Service interface {
 	Execute(context.Context, Invocation) (Result, error)
 }
+
+// Completer supplies shell-completion candidates for the interactive commands.
+// Every method is best-effort: implementations return an empty slice rather than
+// an error so a failed lookup never disrupts the shell.
+type Completer interface {
+	// Branches returns local branch names for the selected project.
+	Branches(ctx context.Context, project ProjectNameOrPath) []string
+	// Projects returns selectable project names.
+	Projects(ctx context.Context) []string
+	// PullRequests returns open pull request candidates for the selected
+	// project, each formatted as a "<selector>:<description>" completion entry.
+	PullRequests(ctx context.Context, project ProjectNameOrPath) []string
+}

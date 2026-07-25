@@ -17,6 +17,7 @@ func main() {
 	os.Exit(cli.Run(ctx, cli.Config{
 		Arguments: os.Args[1:],
 		Service:   command.NewSystemService(),
+		Completer: command.NewSystemCompleter(),
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 	}))

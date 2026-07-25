@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 )
 
 func (client Client) ValidateBranch(ctx context.Context, directory Directory, branch Branch) error {
@@ -46,6 +47,24 @@ func (client Client) ListWorktrees(ctx context.Context, directory Directory) ([]
 		return nil, err
 	}
 	return output.Stdout, nil
+}
+
+// ListLocalBranches returns the local branch names, most recently committed
+// first. It is intended for shell completion and reports no diagnostics beyond
+// the returned error.
+func (client Client) ListLocalBranches(ctx context.Context, directory Directory) ([]Branch, error) {
+	output, err := client.run(ctx, directory, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(output.Stdout), "\n")
+	branches := make([]Branch, 0, len(lines))
+	for _, line := range lines {
+		if line != "" {
+			branches = append(branches, Branch(line))
+		}
+	}
+	return branches, nil
 }
 
 type commandOutput struct {

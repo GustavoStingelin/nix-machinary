@@ -56,6 +56,28 @@ func TestClient_validation_does_not_mutate_real_Git_repository_when_targets_are_
 	require.Equal(t, before, after)
 }
 
+func TestClient_ListLocalBranches_returns_local_heads_without_mutating_the_repository(t *testing.T) {
+	// Given
+	repository := newRepository(t)
+	commit := strings.TrimSpace(string(runGit(t, repository, "rev-parse", "HEAD")))
+	runGit(t, repository, "branch", "feature/one")
+	runGit(t, repository, "branch", "bugfix/two")
+	runGit(t, repository, "update-ref", "refs/remotes/origin/remote-only", commit)
+	runGit(t, repository, "tag", "-m", "tag fixture", "tag-only")
+	defaultBranch := git.Branch(strings.TrimSpace(string(runGit(t, repository, "rev-parse", "--abbrev-ref", "HEAD"))))
+	before := snapshotRepository(t, repository)
+	client := git.NewClient(git.Config{})
+
+	// When
+	branches, err := client.ListLocalBranches(context.Background(), git.Directory(repository))
+	after := snapshotRepository(t, repository)
+
+	// Then
+	require.NoError(t, err)
+	require.ElementsMatch(t, []git.Branch{defaultBranch, "feature/one", "bugfix/two"}, branches)
+	require.Equal(t, before, after)
+}
+
 func newRepository(t *testing.T) string {
 	t.Helper()
 

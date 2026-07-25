@@ -132,3 +132,42 @@ func TestClient_CheckoutPullRequest_retains_raw_stderr_when_the_command_fails(t 
 	require.ErrorAs(t, err, &commandError)
 	require.Equal(t, []byte("fake gh: injected checkout failure for 456"), commandError.Stderr)
 }
+
+func TestClient_ListOpenPullRequests_uses_exact_list_argv_and_parses_summaries(t *testing.T) {
+	// Given
+	helper, recordPath := fakeGH(t)
+	t.Setenv("GH_LIST_STDOUT", "12\tFix the bug\n34\tAdd the thing\n")
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	summaries, err := client.ListOpenPullRequests(context.Background(), github.Directory(directory))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.PullRequestSummary{
+		{Number: github.PullRequestNumber("12"), Title: "Fix the bug"},
+		{Number: github.PullRequestNumber("34"), Title: "Add the thing"},
+	}, summaries)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{"pr", "list", "--state", "open", "--json", "number,title", "--jq", ".[] | [.number, .title] | @tsv"},
+	}, readInvocations(t, recordPath)[0])
+}
+
+func TestClient_ListOpenPullRequests_skips_malformed_lines(t *testing.T) {
+	// Given
+	helper, _ := fakeGH(t)
+	t.Setenv("GH_LIST_STDOUT", "12\tGood\nnot-a-number\ttitle\n\n34\tAlso good\n")
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	summaries, err := client.ListOpenPullRequests(context.Background(), github.Directory(t.TempDir()))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.PullRequestSummary{
+		{Number: github.PullRequestNumber("12"), Title: "Good"},
+		{Number: github.PullRequestNumber("34"), Title: "Also good"},
+	}, summaries)
+}

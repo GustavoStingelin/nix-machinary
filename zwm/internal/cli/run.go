@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Arguments []string
 	Service   Service
+	Completer Completer
 	Stdout    io.Writer
 	Stderr    io.Writer
 }

@@ -21,6 +21,28 @@ func (client Client) CheckoutPullRequest(ctx context.Context, request CheckoutRe
 	return err
 }
 
+// ListOpenPullRequests returns open pull requests as "<number>\t<title>" lines.
+// It is intended for shell completion and reports no diagnostics beyond the
+// returned error.
+func (client Client) ListOpenPullRequests(ctx context.Context, directory Directory) ([]PullRequestSummary, error) {
+	output, err := client.run(ctx, directory, "pr", "list", "--state", "open", "--json", "number,title", "--jq", ".[] | [.number, .title] | @tsv")
+	if err != nil {
+		return nil, err
+	}
+	var summaries []PullRequestSummary
+	for _, line := range strings.Split(string(output.Stdout), "\n") {
+		if line == "" {
+			continue
+		}
+		number, title, found := strings.Cut(line, "\t")
+		if !found || !validNumber(number) {
+			continue
+		}
+		summaries = append(summaries, PullRequestSummary{Number: PullRequestNumber(number), Title: title})
+	}
+	return summaries, nil
+}
+
 func parsePullRequest(output []byte) (PullRequest, error) {
 	metadata := strings.TrimSuffix(string(output), "\n")
 	if metadata == "" || strings.Contains(metadata, "\n") || strings.Count(metadata, "\t") != 1 {

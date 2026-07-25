@@ -40,6 +40,11 @@
         source <(just --completions zsh)
       fi
 
+      # Enable zwm completion (branches for wco, projects for o/-C, PRs for wpr)
+      if command -v zwm >/dev/null 2>&1; then
+        source <(zwm completion zsh)
+      fi
+
       # some shit bin that installs on my user folder...
       export PATH="$HOME/.signet/bin:$PATH"
 

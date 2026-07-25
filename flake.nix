@@ -232,6 +232,13 @@
           assert_usage "o accepts exactly one project name or path" o repo extra
           assert_usage "o does not accept -C/--project" -C selected o repo
           assert_usage "o does not accept -C/--project" o repo -C selected
+
+          # Shell completion emits a sourceable script and advertises subcommands.
+          zwm completion zsh >"$workdir/completion"
+          grep -Fqx '#compdef zwm' "$workdir/completion"
+          zwm --generate-shell-completion >"$workdir/root-complete"
+          grep -Fqx 'wco:check out a branch in a worktree' "$workdir/root-complete"
+
           touch "$out"
         '';
       };
