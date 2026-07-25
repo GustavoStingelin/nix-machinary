@@ -1,16 +1,16 @@
 # PR creation accepts a selector, preserves raw failure stderr, and retains recovery.
-exec zwm -C project pr 123
+exec zwm -C project wpr 123
 cmpenv stdout created
 ! stderr .
 
-exec zwm -C project pr 123
+exec zwm -C project wpr 123
 cmpenv stdout focused
 ! stderr .
 
-assert-exit 64 zwm -C project pr 789
+assert-exit 64 zwm -C project wpr 789
 stderr '^zwm: usage: could not resolve pull request .789.\n$'
 
-assert-exit 1 zwm -C project pr 456
+assert-exit 1 zwm -C project wpr 456
 stderr 'fake gh: injected checkout failure for 456\nzwm: recovery: detached managed pull-request worktree remains at .+; inspect it and complete or remove it manually when safe\nzwm: external: could not checkout pull request\n'
 assert-log $ZWM_TEST_LOG want-log
 

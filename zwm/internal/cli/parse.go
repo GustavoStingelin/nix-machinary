@@ -55,7 +55,7 @@ func parseSubcommand(project ProjectNameOrPath, subcommand string, arguments []s
 		return parseCheckout(project, arguments)
 	case "o":
 		return parseOpenProject(project, arguments)
-	case "pr":
+	case "wpr":
 		return parsePullRequest(project, arguments)
 	default:
 		return parsedInvocation{}, usageError("unknown subcommand '" + subcommand + "'")
@@ -123,13 +123,13 @@ func parseOpenProject(project ProjectNameOrPath, arguments []string) (parsedInvo
 
 func parsePullRequest(project ProjectNameOrPath, arguments []string) (parsedInvocation, error) {
 	if len(arguments) == 0 {
-		return parsedInvocation{}, usageError("pr requires a pull request selector")
+		return parsedInvocation{}, usageError("wpr requires a pull request selector")
 	}
 	if len(arguments) != 1 {
-		return parsedInvocation{}, usageError("pr accepts exactly one pull request selector")
+		return parsedInvocation{}, usageError("wpr accepts exactly one pull request selector")
 	}
 	if arguments[0] == "" {
-		return parsedInvocation{}, usageError("pr requires a pull request selector")
+		return parsedInvocation{}, usageError("wpr requires a pull request selector")
 	}
 	if strings.HasPrefix(arguments[0], "-") {
 		return parsedInvocation{}, usageError("invalid pull request selector '" + arguments[0] + "'")
@@ -138,7 +138,7 @@ func parsePullRequest(project ProjectNameOrPath, arguments []string) (parsedInvo
 	action := PullRequest{Selector: PullRequestSelector(arguments[0])}
 	return parsedInvocation{
 		invocation:    Invocation{Project: project, Action: action},
-		frameworkArgs: []string{"zwm", "pr", string(action.Selector)},
+		frameworkArgs: []string{"zwm", "wpr", string(action.Selector)},
 	}, nil
 }
 

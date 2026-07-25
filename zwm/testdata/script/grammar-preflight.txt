@@ -26,13 +26,13 @@ assert-log $ZWM_TEST_LOG empty-log
 -- help --
 Usage:
   zwm --help | -h
-  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}
+  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}
   zwm o <name-or-path>
 
 Commands:
   wco <branch> | wco -b <new-branch> [<start-point>]
   o <name-or-path>
-  pr <number|url|branch>
+  wpr <number|url|branch>
 
 Global options:
   -C <name-or-path>          Select a project before the subcommand.

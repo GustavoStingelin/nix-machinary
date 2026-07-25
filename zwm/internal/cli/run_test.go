@@ -11,13 +11,13 @@ import (
 
 const expectedHelp = "Usage:\n" +
 	"  zwm --help | -h\n" +
-	"  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}\n" +
+	"  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}\n" +
 	"  zwm o <name-or-path>\n" +
 	"\n" +
 	"Commands:\n" +
 	"  wco <branch> | wco -b <new-branch> [<start-point>]\n" +
 	"  o <name-or-path>\n" +
-	"  pr <number|url|branch>\n" +
+	"  wpr <number|url|branch>\n" +
 	"\n" +
 	"Global options:\n" +
 	"  -C <name-or-path>          Select a project before the subcommand.\n" +
@@ -71,7 +71,7 @@ func TestResultRendering_preserves_worktree_output_for_checkout_and_pull_request
 		args []string
 	}{
 		{name: "checkout", args: []string{"wco", "feature/topic"}},
-		{name: "pull request", args: []string{"pr", "123"}},
+		{name: "pull request", args: []string{"wpr", "123"}},
 	}
 
 	for _, test := range tests {

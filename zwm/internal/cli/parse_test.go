@@ -25,7 +25,7 @@ func TestRawGrammar_rejects_invalid_input_before_service_when_input_is_unsupport
 		{name: "late concatenated project option", args: []string{"wco", "topic", "-Crepo"}, message: "global option '-Crepo' must appear before the subcommand"},
 		{name: "implicit help command", args: []string{"help"}, message: "unknown subcommand 'help'"},
 		{name: "nested checkout help", args: []string{"wco", "--help"}, message: "unknown wco option '--help'"},
-		{name: "nested pull request help", args: []string{"pr", "--help"}, message: "invalid pull request selector '--help'"},
+		{name: "nested pull request help", args: []string{"wpr", "--help"}, message: "invalid pull request selector '--help'"},
 		{name: "help with another argument", args: []string{"--help", "wco"}, message: "option '--help' must be used on its own"},
 		{name: "removed checkout command", args: []string{"co", "topic"}, message: "unknown subcommand 'co'"},
 		{name: "missing checkout branch", args: []string{"wco"}, message: "wco requires an existing local branch"},
@@ -46,10 +46,11 @@ func TestRawGrammar_rejects_invalid_input_before_service_when_input_is_unsupport
 		{name: "late short project option for open", args: []string{"o", "repo", "-C", "selected"}, message: "global option '-C' must appear before the subcommand"},
 		{name: "late equals project option for open", args: []string{"o", "repo", "--project=selected"}, message: "global option '--project=selected' must appear before the subcommand"},
 		{name: "late concatenated project option for open", args: []string{"o", "repo", "-Cselected"}, message: "global option '-Cselected' must appear before the subcommand"},
-		{name: "missing pull request selector", args: []string{"pr"}, message: "pr requires a pull request selector"},
-		{name: "empty pull request selector", args: []string{"pr", ""}, message: "pr requires a pull request selector"},
-		{name: "extra pull request selector", args: []string{"pr", "123", "extra"}, message: "pr accepts exactly one pull request selector"},
-		{name: "hyphen pull request selector", args: []string{"pr", "-123"}, message: "invalid pull request selector '-123'"},
+		{name: "removed pull request command", args: []string{"pr", "123"}, message: "unknown subcommand 'pr'"},
+		{name: "missing pull request selector", args: []string{"wpr"}, message: "wpr requires a pull request selector"},
+		{name: "empty pull request selector", args: []string{"wpr", ""}, message: "wpr requires a pull request selector"},
+		{name: "extra pull request selector", args: []string{"wpr", "123", "extra"}, message: "wpr accepts exactly one pull request selector"},
+		{name: "hyphen pull request selector", args: []string{"wpr", "-123"}, message: "invalid pull request selector '-123'"},
 	}
 
 	for _, test := range tests {
@@ -125,7 +126,7 @@ func TestRawGrammar_delegates_approved_input_when_values_are_valid(t *testing.T)
 		},
 		{
 			name: "pull request selector",
-			args: []string{"pr", "https://github.com/org/repo/pull/123"},
+			args: []string{"wpr", "https://github.com/org/repo/pull/123"},
 			assertion: func(t *testing.T, invocation Invocation) {
 				require.Equal(t, PullRequest{Selector: PullRequestSelector("https://github.com/org/repo/pull/123")}, invocation.Action)
 			},
@@ -174,6 +175,11 @@ func TestRawGrammar_forwards_exact_framework_arguments_when_worktree_input_is_va
 			name:     "new branch with start point",
 			args:     []string{"wco", "-b", "new/topic", "origin/main"},
 			expected: []string{"zwm", "wco", "-b", "new/topic", "origin/main"},
+		},
+		{
+			name:     "pull request selector",
+			args:     []string{"wpr", "123"},
+			expected: []string{"zwm", "wpr", "123"},
 		},
 	}
 

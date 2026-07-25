@@ -203,11 +203,11 @@
           trap 'rm -rf "$workdir"' EXIT
 
           zwm --help >"$workdir/help"
-          grep -Fqx '  zwm [-C <name-or-path> | --project <name-or-path>] {wco|pr}' "$workdir/help"
+          grep -Fqx '  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}' "$workdir/help"
           grep -Fqx '  zwm o <name-or-path>' "$workdir/help"
           grep -Fqx '  wco <branch> | wco -b <new-branch> [<start-point>]' "$workdir/help"
           grep -Fqx '  o <name-or-path>' "$workdir/help"
-          grep -Fqx '  pr <number|url|branch>' "$workdir/help"
+          grep -Fqx '  wpr <number|url|branch>' "$workdir/help"
           if grep -Eq '^  co([[:space:]]|$)|^  zwm co([[:space:]]|$)|^  zwm .*\{co([|}]|[[:space:]]|$)' "$workdir/help"; then
             echo "zwm help advertises removed co command" >&2
             exit 1

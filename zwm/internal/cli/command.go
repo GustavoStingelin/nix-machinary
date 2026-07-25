@@ -18,7 +18,7 @@ func newCommand(config Config, invocation Invocation, result *Result) *urfave.Co
 
 	return &urfave.Command{
 		Name:                   "zwm",
-		UsageText:              "zwm [-C|--project <name-or-path>] {wco|pr} | zwm o <name-or-path>",
+		UsageText:              "zwm [-C|--project <name-or-path>] {wco|wpr} | zwm o <name-or-path>",
 		HideHelp:               true,
 		HideHelpCommand:        true,
 		UseShortOptionHandling: false,
@@ -42,7 +42,7 @@ func newCommand(config Config, invocation Invocation, result *Result) *urfave.Co
 				Action:          execute,
 			},
 			{
-				Name:            "pr",
+				Name:            "wpr",
 				HideHelp:        true,
 				HideHelpCommand: true,
 				SkipFlagParsing: true,
