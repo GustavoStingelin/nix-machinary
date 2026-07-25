@@ -15,25 +15,20 @@ type Config struct {
 	Stderr    io.Writer
 }
 
-// Run parses raw arguments, delegates approved requests, and returns a process exit code.
+// Run parses raw arguments with urfave/cli, delegates approved requests, and
+// returns a process exit code.
 func Run(ctx context.Context, config Config) int {
-	parsed, err := parse(config.Arguments)
-	if err != nil {
-		return writeFailure(config.Stderr, err)
-	}
-	if parsed.help {
-		if _, err := io.WriteString(config.Stdout, HelpText); err != nil {
-			return errs.ExitCode(errs.Wrap(errs.External, "write help", err))
-		}
-		return 0
-	}
-
 	var result Result
-	if err := newCommand(config, parsed.invocation, &result).Run(ctx, parsed.frameworkArgs); err != nil {
+	arguments := append([]string{"zwm"}, config.Arguments...)
+	if err := newCommand(config, &result).Run(ctx, arguments); err != nil {
 		return writeFailure(config.Stderr, err)
 	}
 	if err := writeResult(config.Stdout, result); err != nil {
 		return writeFailure(config.Stderr, err)
 	}
 	return 0
+}
+
+func usageError(message string) error {
+	return errs.New(errs.Usage, message)
 }

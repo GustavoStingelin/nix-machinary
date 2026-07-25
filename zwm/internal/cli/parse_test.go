@@ -13,44 +13,42 @@ func TestRawGrammar_rejects_invalid_input_before_service_when_input_is_unsupport
 		message string
 	}{
 		{name: "missing subcommand", message: "missing subcommand"},
-		{name: "missing short project value", args: []string{"-C"}, message: "option '-C' requires a value"},
-		{name: "missing long project value", args: []string{"--project", "--help"}, message: "option '--project' requires a value"},
-		{name: "equals project option", args: []string{"--project=repo", "wco", "topic"}, message: "unknown global option '--project=repo'"},
-		{name: "concatenated project option", args: []string{"-Crepo", "wco", "topic"}, message: "unknown global option '-Crepo'"},
-		{name: "unknown global option", args: []string{"--unknown", "wco"}, message: "unknown global option '--unknown'"},
 		{name: "unknown command", args: []string{"unknown"}, message: "unknown subcommand 'unknown'"},
-		{name: "late long project option", args: []string{"wco", "topic", "--project", "repo"}, message: "global option '--project' must appear before the subcommand"},
-		{name: "late short project option", args: []string{"wco", "topic", "-C", "repo"}, message: "global option '-C' must appear before the subcommand"},
-		{name: "late equals project option", args: []string{"wco", "topic", "--project=repo"}, message: "global option '--project=repo' must appear before the subcommand"},
-		{name: "late concatenated project option", args: []string{"wco", "topic", "-Crepo"}, message: "global option '-Crepo' must appear before the subcommand"},
 		{name: "implicit help command", args: []string{"help"}, message: "unknown subcommand 'help'"},
-		{name: "nested checkout help", args: []string{"wco", "--help"}, message: "unknown wco option '--help'"},
-		{name: "nested pull request help", args: []string{"wpr", "--help"}, message: "invalid pull request selector '--help'"},
-		{name: "help with another argument", args: []string{"--help", "wco"}, message: "option '--help' must be used on its own"},
 		{name: "removed checkout command", args: []string{"co", "topic"}, message: "unknown subcommand 'co'"},
+		{name: "removed pull request command", args: []string{"pr", "123"}, message: "unknown subcommand 'pr'"},
+
+		{name: "missing short project value", args: []string{"-C"}, message: "flag needs an argument: -C"},
+		{name: "long project value swallows following option", args: []string{"--project", "--help"}, message: "missing subcommand"},
+		{name: "concatenated project option", args: []string{"-Crepo", "wco", "topic"}, message: "flag provided but not defined: -Crepo"},
+		{name: "unknown global option", args: []string{"--unknown", "wco"}, message: "flag provided but not defined: -unknown"},
+
 		{name: "missing checkout branch", args: []string{"wco"}, message: "wco requires an existing local branch"},
 		{name: "empty checkout branch", args: []string{"wco", ""}, message: "wco requires an existing local branch"},
+		{name: "option-like checkout branch", args: []string{"wco", "-topic"}, message: "flag provided but not defined: -topic"},
+		{name: "numeric option-like checkout branch", args: []string{"wco", "-123"}, message: "unknown wco option '-123'"},
+		{name: "extra checkout branch", args: []string{"wco", "topic", "extra"}, message: "wco accepts exactly one existing local branch"},
 		{name: "missing new checkout branch", args: []string{"wco", "-b"}, message: "wco -b requires a new branch"},
 		{name: "empty new checkout branch", args: []string{"wco", "-b", ""}, message: "wco -b requires a new branch"},
+		{name: "option-like new checkout branch", args: []string{"wco", "-b", "-new-topic"}, message: "flag provided but not defined: -new-topic"},
 		{name: "empty explicit start point", args: []string{"wco", "-b", "topic", ""}, message: "wco -b requires a non-empty start-point when provided"},
 		{name: "extra new checkout argument", args: []string{"wco", "-b", "topic", "origin/main", "extra"}, message: "wco -b accepts a new branch and optional start-point"},
-		{name: "checkout option", args: []string{"wco", "-topic"}, message: "unknown wco option '-topic'"},
-		{name: "extra checkout branch", args: []string{"wco", "topic", "extra"}, message: "wco accepts exactly one existing local branch"},
+		{name: "nested checkout help flag", args: []string{"wco", "--help"}, message: "flag provided but not defined: -help"},
+
 		{name: "missing open project", args: []string{"o"}, message: "o requires a project name or path"},
 		{name: "empty open project", args: []string{"o", ""}, message: "o requires a project name or path"},
 		{name: "extra open project argument", args: []string{"o", "repo", "extra"}, message: "o accepts exactly one project name or path"},
-		{name: "option-like open project", args: []string{"o", "-repo"}, message: "invalid project name or path '-repo'"},
+		{name: "option-like open project", args: []string{"o", "-repo"}, message: "flag provided but not defined: -repo"},
 		{name: "short project option before open", args: []string{"-C", "selected", "o", "repo"}, message: "o does not accept -C/--project"},
 		{name: "long project option before open", args: []string{"--project", "selected", "o", "repo"}, message: "o does not accept -C/--project"},
-		{name: "late long project option for open", args: []string{"o", "repo", "--project", "selected"}, message: "global option '--project' must appear before the subcommand"},
-		{name: "late short project option for open", args: []string{"o", "repo", "-C", "selected"}, message: "global option '-C' must appear before the subcommand"},
-		{name: "late equals project option for open", args: []string{"o", "repo", "--project=selected"}, message: "global option '--project=selected' must appear before the subcommand"},
-		{name: "late concatenated project option for open", args: []string{"o", "repo", "-Cselected"}, message: "global option '-Cselected' must appear before the subcommand"},
-		{name: "removed pull request command", args: []string{"pr", "123"}, message: "unknown subcommand 'pr'"},
+		{name: "project option after open", args: []string{"o", "repo", "--project", "selected"}, message: "o does not accept -C/--project"},
+		{name: "equals project option after open", args: []string{"o", "repo", "--project=selected"}, message: "o does not accept -C/--project"},
+
 		{name: "missing pull request selector", args: []string{"wpr"}, message: "wpr requires a pull request selector"},
 		{name: "empty pull request selector", args: []string{"wpr", ""}, message: "wpr requires a pull request selector"},
 		{name: "extra pull request selector", args: []string{"wpr", "123", "extra"}, message: "wpr accepts exactly one pull request selector"},
 		{name: "hyphen pull request selector", args: []string{"wpr", "-123"}, message: "invalid pull request selector '-123'"},
+		{name: "nested pull request help flag", args: []string{"wpr", "--help"}, message: "flag provided but not defined: -help"},
 	}
 
 	for _, test := range tests {
@@ -87,6 +85,22 @@ func TestRawGrammar_delegates_approved_input_when_values_are_valid(t *testing.T)
 			},
 		},
 		{
+			name: "existing checkout with equals project option",
+			args: []string{"--project=named-project", "wco", "feature/topic"},
+			assertion: func(t *testing.T, invocation Invocation) {
+				require.Equal(t, ProjectNameOrPath("named-project"), invocation.Project)
+				require.Equal(t, CheckoutExisting{Branch: BranchName("feature/topic")}, invocation.Action)
+			},
+		},
+		{
+			name: "existing checkout with project option after subcommand",
+			args: []string{"wco", "feature/topic", "--project", "named-project"},
+			assertion: func(t *testing.T, invocation Invocation) {
+				require.Equal(t, ProjectNameOrPath("named-project"), invocation.Project)
+				require.Equal(t, CheckoutExisting{Branch: BranchName("feature/topic")}, invocation.Action)
+			},
+		},
+		{
 			name: "new checkout with explicit start point",
 			args: []string{"-C", "path/project", "wco", "-b", "new/topic", "origin/main"},
 			assertion: func(t *testing.T, invocation Invocation) {
@@ -99,14 +113,6 @@ func TestRawGrammar_delegates_approved_input_when_values_are_valid(t *testing.T)
 			args: []string{"wco", "-b", "new/topic"},
 			assertion: func(t *testing.T, invocation Invocation) {
 				require.Equal(t, CheckoutNew{Branch: BranchName("new/topic")}, invocation.Action)
-			},
-		},
-		{
-			name: "new checkout preserves hyphen positional values",
-			args: []string{"wco", "-b", "-new-topic", "-start-point"},
-			assertion: func(t *testing.T, invocation Invocation) {
-				require.Empty(t, invocation.Project)
-				require.Equal(t, CheckoutNew{Branch: BranchName("-new-topic"), StartPoint: StartPoint("-start-point")}, invocation.Action)
 			},
 		},
 		{
@@ -151,46 +157,6 @@ func TestRawGrammar_delegates_approved_input_when_values_are_valid(t *testing.T)
 			require.Empty(t, stderr)
 			require.Len(t, service.invocations, 1)
 			test.assertion(t, service.invocations[0])
-		})
-	}
-}
-
-func TestRawGrammar_forwards_exact_framework_arguments_when_worktree_input_is_valid(t *testing.T) {
-	tests := []struct {
-		name     string
-		args     []string
-		expected []string
-	}{
-		{
-			name:     "existing branch",
-			args:     []string{"wco", "feature/topic"},
-			expected: []string{"zwm", "wco", "feature/topic"},
-		},
-		{
-			name:     "new branch without start point",
-			args:     []string{"wco", "-b", "new/topic"},
-			expected: []string{"zwm", "wco", "-b", "new/topic"},
-		},
-		{
-			name:     "new branch with start point",
-			args:     []string{"wco", "-b", "new/topic", "origin/main"},
-			expected: []string{"zwm", "wco", "-b", "new/topic", "origin/main"},
-		},
-		{
-			name:     "pull request selector",
-			args:     []string{"wpr", "123"},
-			expected: []string{"zwm", "wpr", "123"},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// When
-			parsed, err := parse(test.args)
-
-			// Then
-			require.NoError(t, err)
-			require.Equal(t, test.expected, parsed.frameworkArgs)
 		})
 	}
 }

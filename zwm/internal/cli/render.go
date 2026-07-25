@@ -14,6 +14,9 @@ import (
 
 func writeResult(writer io.Writer, result Result) error {
 	switch result := result.(type) {
+	case nil:
+		// Help was shown or no action ran; nothing to render.
+		return nil
 	case WorktreeResult:
 		_, err := fmt.Fprintf(writer, "worktree_path=%s\ndisplay_identity=%s\ntab_action=%s\ntab_title=%s\ntab_worktree=%s\n",
 			result.Worktree,

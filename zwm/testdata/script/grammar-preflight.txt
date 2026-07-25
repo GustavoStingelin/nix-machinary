@@ -4,10 +4,10 @@ cmp stdout help
 ! stderr .
 
 assert-exit 64 zwm -C
-stderr '^zwm: usage: option .-C. requires a value\n$'
+stderr '^zwm: usage: flag needs an argument: -C\n$'
 
-assert-exit 64 zwm --project=project wco feature/ready
-stderr '^zwm: usage: unknown global option .--project=project.\n$'
+assert-exit 64 zwm -Crepo wco feature/ready
+stderr '^zwm: usage: flag provided but not defined: -Crepo\n$'
 
 assert-exit 64 zwm co topic
 stderr '^zwm: usage: unknown subcommand .co.\n$'
@@ -24,17 +24,18 @@ stderr '^zwm: preflight: must be run inside an existing Zellij session\n$'
 assert-log $ZWM_TEST_LOG empty-log
 
 -- help --
-Usage:
-  zwm --help | -h
-  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}
-  zwm o <name-or-path>
+NAME:
+   zwm - Zellij worktree manager
 
-Commands:
-  wco <branch> | wco -b <new-branch> [<start-point>]
-  o <name-or-path>
-  wpr <number|url|branch>
+USAGE:
+   zwm [global options] [command [command options]]
 
-Global options:
-  -C <name-or-path>          Select a project before the subcommand.
-  --project <name-or-path>   Select a project before the subcommand.
+COMMANDS:
+   wco  check out a branch in a worktree
+   o    open a project
+   wpr  check out a pull request in a worktree
+
+GLOBAL OPTIONS:
+   --project string, -C string  select a project before the subcommand
+   --help, -h                   show help
 -- empty-log --

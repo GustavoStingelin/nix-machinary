@@ -203,12 +203,11 @@
           trap 'rm -rf "$workdir"' EXIT
 
           zwm --help >"$workdir/help"
-          grep -Fqx '  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}' "$workdir/help"
-          grep -Fqx '  zwm o <name-or-path>' "$workdir/help"
-          grep -Fqx '  wco <branch> | wco -b <new-branch> [<start-point>]' "$workdir/help"
-          grep -Fqx '  o <name-or-path>' "$workdir/help"
-          grep -Fqx '  wpr <number|url|branch>' "$workdir/help"
-          if grep -Eq '^  co([[:space:]]|$)|^  zwm co([[:space:]]|$)|^  zwm .*\{co([|}]|[[:space:]]|$)' "$workdir/help"; then
+          grep -Fqx '   wco  check out a branch in a worktree' "$workdir/help"
+          grep -Fqx '   o    open a project' "$workdir/help"
+          grep -Fqx '   wpr  check out a pull request in a worktree' "$workdir/help"
+          grep -Fqx '   --project string, -C string  select a project before the subcommand' "$workdir/help"
+          if grep -Eq '^   co([[:space:]]|$)' "$workdir/help"; then
             echo "zwm help advertises removed co command" >&2
             exit 1
           fi
@@ -232,7 +231,7 @@
           assert_usage "o requires a project name or path" o
           assert_usage "o accepts exactly one project name or path" o repo extra
           assert_usage "o does not accept -C/--project" -C selected o repo
-          assert_usage "global option '-C' must appear before the subcommand" o repo -C selected
+          assert_usage "o does not accept -C/--project" o repo -C selected
           touch "$out"
         '';
       };

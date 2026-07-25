@@ -9,19 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const expectedHelp = "Usage:\n" +
-	"  zwm --help | -h\n" +
-	"  zwm [-C <name-or-path> | --project <name-or-path>] {wco|wpr}\n" +
-	"  zwm o <name-or-path>\n" +
+const expectedHelp = "NAME:\n" +
+	"   zwm - Zellij worktree manager\n" +
 	"\n" +
-	"Commands:\n" +
-	"  wco <branch> | wco -b <new-branch> [<start-point>]\n" +
-	"  o <name-or-path>\n" +
-	"  wpr <number|url|branch>\n" +
+	"USAGE:\n" +
+	"   zwm [global options] [command [command options]]\n" +
 	"\n" +
-	"Global options:\n" +
-	"  -C <name-or-path>          Select a project before the subcommand.\n" +
-	"  --project <name-or-path>   Select a project before the subcommand.\n"
+	"COMMANDS:\n" +
+	"   wco  check out a branch in a worktree\n" +
+	"   o    open a project\n" +
+	"   wpr  check out a pull request in a worktree\n" +
+	"\n" +
+	"GLOBAL OPTIONS:\n" +
+	"   --project string, -C string  select a project before the subcommand\n" +
+	"   --help, -h                   show help\n"
 
 func TestHelp_prints_exact_help_when_root_help_is_alone(t *testing.T) {
 	// Given
