@@ -165,7 +165,7 @@ func TestClient_CheckoutPullRequest_retains_raw_stderr_when_the_command_fails(t 
 func TestClient_ListOpenPullRequests_uses_exact_list_argv_and_parses_summaries(t *testing.T) {
 	// Given
 	helper, recordPath := fakeGH(t)
-	t.Setenv("GH_LIST_STDOUT", "12\tFix the bug\n34\tAdd the thing\n")
+	t.Setenv("GH_LIST_STDOUT", "12\tFix the bug\talice\n34\tAdd the thing\tbob\n")
 	directory := t.TempDir()
 	client := github.NewClient(github.Config{Executable: helper})
 
@@ -175,19 +175,19 @@ func TestClient_ListOpenPullRequests_uses_exact_list_argv_and_parses_summaries(t
 	// Then
 	require.NoError(t, err)
 	require.Equal(t, []github.PullRequestSummary{
-		{Number: github.PullRequestNumber("12"), Title: "Fix the bug"},
-		{Number: github.PullRequestNumber("34"), Title: "Add the thing"},
+		{Number: github.PullRequestNumber("12"), Title: "Fix the bug", Author: "alice"},
+		{Number: github.PullRequestNumber("34"), Title: "Add the thing", Author: "bob"},
 	}, summaries)
 	require.Equal(t, invocation{
 		Directory: directory,
-		Arguments: []string{"pr", "list", "--state", "open", "--json", "number,title", "--jq", ".[] | [.number, .title] | @tsv"},
+		Arguments: []string{"pr", "list", "--state", "open", "--json", "number,title,author", "--jq", ".[] | [.number, .title, .author.login] | @tsv"},
 	}, readInvocations(t, recordPath)[0])
 }
 
-func TestClient_ListOpenPullRequests_skips_malformed_lines(t *testing.T) {
+func TestClient_ListOpenPullRequests_skips_lines_without_number_title_and_author(t *testing.T) {
 	// Given
 	helper, _ := fakeGH(t)
-	t.Setenv("GH_LIST_STDOUT", "12\tGood\nnot-a-number\ttitle\n\n34\tAlso good\n")
+	t.Setenv("GH_LIST_STDOUT", "12\tGood\talice\nnot-a-number\ttitle\tbob\n34\tMissing author\n\n56\tAlso good\tcarol\n")
 	client := github.NewClient(github.Config{Executable: helper})
 
 	// When
@@ -196,7 +196,7 @@ func TestClient_ListOpenPullRequests_skips_malformed_lines(t *testing.T) {
 	// Then
 	require.NoError(t, err)
 	require.Equal(t, []github.PullRequestSummary{
-		{Number: github.PullRequestNumber("12"), Title: "Good"},
-		{Number: github.PullRequestNumber("34"), Title: "Also good"},
+		{Number: github.PullRequestNumber("12"), Title: "Good", Author: "alice"},
+		{Number: github.PullRequestNumber("56"), Title: "Also good", Author: "carol"},
 	}, summaries)
 }

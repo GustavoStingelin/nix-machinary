@@ -2,7 +2,10 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sort"
+	"strconv"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/cli"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/git"
@@ -58,8 +61,8 @@ func (completer Completer) Projects(_ context.Context) []string {
 	return project.ListNames(project.Directory(home))
 }
 
-// PullRequests returns open pull requests for the selected project as
-// "<number>:<title>" completion entries.
+// PullRequests returns open pull requests for the selected project, newest
+// first, as "<number>:<author>  <title>" completion entries.
 func (completer Completer) PullRequests(ctx context.Context, selected cli.ProjectNameOrPath) []string {
 	resolution, ok := completer.resolve(ctx, selected)
 	if !ok {
@@ -69,11 +72,49 @@ func (completer Completer) PullRequests(ctx context.Context, selected cli.Projec
 	if err != nil {
 		return nil
 	}
-	entries := make([]string, 0, len(summaries))
-	for _, summary := range summaries {
-		entries = append(entries, string(summary.Number)+":"+summary.Title)
+	return pullRequestCandidates(summaries)
+}
+
+// pullRequestCandidates renders pull request summaries as zsh completion
+// entries. Entries are ordered by descending number (newest first) and the
+// author handle is padded into a column so titles line up.
+func pullRequestCandidates(summaries []github.PullRequestSummary) []string {
+	ordered := append([]github.PullRequestSummary(nil), summaries...)
+	sort.Slice(ordered, func(left, right int) bool {
+		return pullRequestNumber(ordered[left].Number) > pullRequestNumber(ordered[right].Number)
+	})
+
+	authorWidth := 0
+	for _, summary := range ordered {
+		if handle := authorHandle(summary.Author); len(handle) > authorWidth {
+			authorWidth = len(handle)
+		}
+	}
+
+	entries := make([]string, 0, len(ordered))
+	for _, summary := range ordered {
+		// "<number>:<description>" — zsh _describe splits on the first colon,
+		// so the number is the inserted selector and the rest is shown as help.
+		entries = append(entries, fmt.Sprintf("%s:%-*s  %s", summary.Number, authorWidth, authorHandle(summary.Author), summary.Title))
 	}
 	return entries
+}
+
+func authorHandle(login string) string {
+	if login == "" {
+		return "@?"
+	}
+	return "@" + login
+}
+
+// pullRequestNumber parses a validated pull request number for ordering. The
+// GitHub client only emits digit-only numbers, so a parse failure sorts last.
+func pullRequestNumber(number github.PullRequestNumber) int {
+	value, err := strconv.Atoi(string(number))
+	if err != nil {
+		return -1
+	}
+	return value
 }
 
 func (completer Completer) resolve(ctx context.Context, selected cli.ProjectNameOrPath) (project.Resolution, bool) {

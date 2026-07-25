@@ -19,6 +19,7 @@ type PullRequest struct {
 type PullRequestSummary struct {
 	Number PullRequestNumber
 	Title  string
+	Author string
 }
 
 type CheckoutRequest struct {

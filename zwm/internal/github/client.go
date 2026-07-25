@@ -25,11 +25,11 @@ func (client Client) CheckoutPullRequest(ctx context.Context, request CheckoutRe
 	return err
 }
 
-// ListOpenPullRequests returns open pull requests as "<number>\t<title>" lines.
-// It is intended for shell completion and reports no diagnostics beyond the
-// returned error.
+// ListOpenPullRequests returns open pull requests as number, title, and author
+// handle. It is intended for shell completion and reports no diagnostics beyond
+// the returned error.
 func (client Client) ListOpenPullRequests(ctx context.Context, directory Directory) ([]PullRequestSummary, error) {
-	output, err := client.run(ctx, directory, "pr", "list", "--state", "open", "--json", "number,title", "--jq", ".[] | [.number, .title] | @tsv")
+	output, err := client.run(ctx, directory, "pr", "list", "--state", "open", "--json", "number,title,author", "--jq", ".[] | [.number, .title, .author.login] | @tsv")
 	if err != nil {
 		return nil, err
 	}
@@ -38,11 +38,11 @@ func (client Client) ListOpenPullRequests(ctx context.Context, directory Directo
 		if line == "" {
 			continue
 		}
-		number, title, found := strings.Cut(line, "\t")
-		if !found || !validNumber(number) {
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) != 3 || !validNumber(fields[0]) {
 			continue
 		}
-		summaries = append(summaries, PullRequestSummary{Number: PullRequestNumber(number), Title: title})
+		summaries = append(summaries, PullRequestSummary{Number: PullRequestNumber(fields[0]), Title: fields[1], Author: fields[2]})
 	}
 	return summaries, nil
 }
