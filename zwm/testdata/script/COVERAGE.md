@@ -8,7 +8,7 @@
 | wco-existing | `existing-focus.txt`, `real-git.txt` | `internal/app` existing-branch real-Git tests |
 | wco-new | `new-worktree.txt`, `new-collision.txt` | `internal/app` new-branch real-Git tests |
 | o | `open-project.txt`, `open-project-output.txt`, and `open-project-rejection.txt` cover canonical root create/focus, path forms, newline argv, non-mutation snapshots, and strict rejection | `internal/command` and `internal/project` open-project tests |
-| wpr | `pull-request.txt` covers create, reuse, malformed metadata, and recovery | `internal/app` and `internal/github` PR real-Git tests |
+| wpr | `pull-request.txt` covers create, reuse, force reset, malformed metadata, and recovery | `internal/app` and `internal/github` PR real-Git tests |
 | zellij | all successful scripts assert create/focus via exact JSON command records | `internal/zellij` argv, preflight, and launcher tests |
 
 `assert-log` decodes JSON Lines and compares sequence, executable, exact argv array, and cwd. It also rejects every prohibited Git and Zellij operation structurally; no substring command assertions are used.

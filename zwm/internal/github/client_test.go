@@ -113,6 +113,35 @@ func TestClient_CheckoutPullRequest_uses_exact_checkout_argv_and_worktree(t *tes
 	}, readInvocations(t, recordPath)[0])
 }
 
+func TestClient_CheckoutPullRequest_appends_force_flag_when_force_is_requested(t *testing.T) {
+	// Given
+	helper, recordPath := fakeGH(t)
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	err := client.CheckoutPullRequest(context.Background(), github.CheckoutRequest{
+		Directory: github.Directory(directory),
+		Selector:  github.PullRequestSelector("123"),
+		Branch:    github.Branch("zwm/pr-123-deadbeef"),
+		Force:     true,
+	})
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{
+			"pr",
+			"checkout",
+			"123",
+			"--branch",
+			"zwm/pr-123-deadbeef",
+			"--force",
+		},
+	}, readInvocations(t, recordPath)[0])
+}
+
 func TestClient_CheckoutPullRequest_retains_raw_stderr_when_the_command_fails(t *testing.T) {
 	// Given
 	helper, _ := fakeGH(t)

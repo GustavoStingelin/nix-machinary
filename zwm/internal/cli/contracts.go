@@ -67,6 +67,9 @@ func (CheckoutNew) action() {}
 // PullRequest requests checkout of a pull request selector.
 type PullRequest struct {
 	Selector PullRequestSelector
+	// Force resets an existing managed pull-request worktree to the pull
+	// request's latest remote state instead of reusing the local version.
+	Force bool
 }
 
 func (PullRequest) action() {}

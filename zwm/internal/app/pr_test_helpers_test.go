@@ -58,6 +58,7 @@ type fakePullRequestGateway struct {
 	checkoutError    error
 	resolveSelectors []github.PullRequestSelector
 	checkoutBranches []github.Branch
+	checkoutForces   []bool
 	onCheckout       func(github.Branch)
 }
 
@@ -68,6 +69,7 @@ func (gateway *fakePullRequestGateway) ResolvePullRequest(_ context.Context, _ g
 
 func (gateway *fakePullRequestGateway) CheckoutPullRequest(_ context.Context, request github.CheckoutRequest) error {
 	gateway.checkoutBranches = append(gateway.checkoutBranches, request.Branch)
+	gateway.checkoutForces = append(gateway.checkoutForces, request.Force)
 	if gateway.onCheckout != nil {
 		gateway.onCheckout(request.Branch)
 	}

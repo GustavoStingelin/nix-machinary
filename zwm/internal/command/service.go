@@ -103,6 +103,7 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 		result, checkoutErr := service.pullRequests.Checkout(ctx, app.PullRequestInput{
 			Project:  resolution,
 			Selector: github.PullRequestSelector(action.Selector),
+			Force:    action.Force,
 		})
 		if checkoutErr != nil {
 			return nil, checkoutErr

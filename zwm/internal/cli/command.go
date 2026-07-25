@@ -13,6 +13,7 @@ import (
 const (
 	projectFlagName = "project"
 	newBranchFlag   = "b"
+	forceFlag       = "force"
 )
 
 // newCommand builds the urfave/cli command tree. Flag and subcommand parsing is
@@ -154,6 +155,9 @@ func pullRequestCommand(config Config, result *Result) *urfave.Command {
 		Usage:     "check out a pull request in a worktree",
 		ArgsUsage: "<number|url|branch>",
 		HideHelp:  true,
+		Flags: []urfave.Flag{
+			&urfave.BoolFlag{Name: forceFlag, Aliases: []string{"f"}, Usage: "reset an existing worktree to the pull request's latest remote state"},
+		},
 		ShellComplete: func(ctx context.Context, cmd *urfave.Command) {
 			if config.Completer != nil && cmd.NArg() == 0 {
 				printCandidates(cmd.Root().Writer, config.Completer.PullRequests(ctx, project(cmd)))
@@ -172,7 +176,7 @@ func pullRequestCommand(config Config, result *Result) *urfave.Command {
 			if strings.HasPrefix(arguments[0], "-") {
 				return usageError("invalid pull request selector '" + arguments[0] + "'")
 			}
-			return execute(ctx, config, result, project(cmd), PullRequest{Selector: PullRequestSelector(arguments[0])})
+			return execute(ctx, config, result, project(cmd), PullRequest{Selector: PullRequestSelector(arguments[0]), Force: cmd.Bool(forceFlag)})
 		},
 	}
 }

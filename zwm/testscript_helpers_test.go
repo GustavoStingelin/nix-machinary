@@ -165,6 +165,11 @@ func runPullRequestView(arguments []string) {
 }
 
 func runPullRequestCheckout(arguments []string) {
+	force := false
+	if len(arguments) == 6 && arguments[5] == "--force" {
+		force = true
+		arguments = arguments[:5]
+	}
 	if len(arguments) != 5 || arguments[3] != "--branch" {
 		fmt.Fprintln(os.Stderr, "fake gh: unexpected pr checkout arguments")
 		mainExit(64)
@@ -177,7 +182,13 @@ func runPullRequestCheckout(arguments []string) {
 		fmt.Fprintln(os.Stderr, "fake gh: unexpected successful checkout selector")
 		mainExit(64)
 	}
-	runExternal(gitExecutable(), []string{"checkout", "--quiet", "-b", arguments[4], os.Getenv("ZWM_TEST_GH_COMMIT")})
+	// A fresh checkout creates the branch; --force resets an existing one, as
+	// gh does when the pull request author updated the head branch.
+	checkoutFlag := "-b"
+	if force {
+		checkoutFlag = "-B"
+	}
+	runExternal(gitExecutable(), []string{"checkout", "--quiet", checkoutFlag, arguments[4], os.Getenv("ZWM_TEST_GH_COMMIT")})
 }
 
 func fakeZellij() {
@@ -370,6 +381,14 @@ func assertLog(script *testscript.TestScript, negated bool, arguments []string) 
 		script.Fatalf("structured external command log differs\nactual: %#v\nexpected: %#v", actual, expected)
 	}
 	for _, record := range actual {
+		// The forbidden-argument scan enforces the raw git/zellij safety
+		// contract (git writes limited to worktree add, zellij to query/focus/
+		// create). gh invocations are fully pinned by the argv comparison above,
+		// and gh pr checkout --force is the intended way to reset a stale
+		// pull-request worktree to the latest remote state.
+		if record.Command == "gh" {
+			continue
+		}
 		for _, argument := range record.Args {
 			if slices.Contains([]string{"--force", "-B", "reset", "remove", "prune", "repair", "move", "session", "attach", "switch"}, argument) {
 				script.Fatalf("forbidden structured command argument %q in %#v", argument, record)

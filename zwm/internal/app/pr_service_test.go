@@ -69,6 +69,82 @@ func TestCheckoutPR_creates_then_reuses_the_deterministic_managed_worktree_for_b
 	require.Equal(t, []github.PullRequestSelector{"feature/pr-ready", "https://github.com/example/project/pull/123", "123"}, gateway.resolveSelectors)
 }
 
+func TestCheckoutPR_force_resets_the_reused_managed_worktree_to_the_latest_remote_state(t *testing.T) {
+	// Given
+	projectResolution := pullRequestProject(t)
+	ensureManagedRoot(t, projectResolution)
+	pullRequest := github.PullRequest{Number: github.PullRequestNumber("123"), HeadRefName: github.HeadRefName("feature/pr-ready")}
+	git := &fakePullRequestGit{records: initialRecords(projectResolution), head: worktree.OID("0123456789abcdef0123456789abcdef01234567")}
+	gateway := &fakePullRequestGateway{pullRequest: pullRequest}
+	gateway.onCheckout = func(branch github.Branch) {
+		git.register(git.addCalls[len(git.addCalls)-1], worktree.Branch(branch))
+	}
+	service := app.NewPullRequestService(git, gateway)
+
+	// When
+	created, createError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123")})
+	forced, forceError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123"), Force: true})
+
+	// Then
+	require.NoError(t, createError)
+	require.NoError(t, forceError)
+	require.Equal(t, app.PullRequestCreated, created.Action)
+	require.Equal(t, app.PullRequestReused, forced.Action)
+	require.Equal(t, expectedPath(projectResolution, pullRequest), forced.Worktree)
+	// The initial creation checks out once without force; the forced reuse
+	// re-runs checkout with force to reset local to remote.
+	require.Len(t, git.addCalls, 1)
+	require.Equal(t, []bool{false, true}, gateway.checkoutForces)
+}
+
+func TestCheckoutPR_reuse_without_force_does_not_re_checkout_the_managed_worktree(t *testing.T) {
+	// Given
+	projectResolution := pullRequestProject(t)
+	ensureManagedRoot(t, projectResolution)
+	pullRequest := github.PullRequest{Number: github.PullRequestNumber("123"), HeadRefName: github.HeadRefName("feature/pr-ready")}
+	git := &fakePullRequestGit{records: initialRecords(projectResolution), head: worktree.OID("0123456789abcdef0123456789abcdef01234567")}
+	gateway := &fakePullRequestGateway{pullRequest: pullRequest}
+	gateway.onCheckout = func(branch github.Branch) {
+		git.register(git.addCalls[len(git.addCalls)-1], worktree.Branch(branch))
+	}
+	service := app.NewPullRequestService(git, gateway)
+
+	// When
+	_, createError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123")})
+	reused, reuseError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123")})
+
+	// Then
+	require.NoError(t, createError)
+	require.NoError(t, reuseError)
+	require.Equal(t, app.PullRequestReused, reused.Action)
+	require.Equal(t, []bool{false}, gateway.checkoutForces)
+}
+
+func TestCheckoutPR_force_surfaces_checkout_failure_without_recovery_leftover(t *testing.T) {
+	// Given
+	projectResolution := pullRequestProject(t)
+	ensureManagedRoot(t, projectResolution)
+	pullRequest := github.PullRequest{Number: github.PullRequestNumber("123"), HeadRefName: github.HeadRefName("feature/pr-ready")}
+	git := &fakePullRequestGit{records: initialRecords(projectResolution), head: worktree.OID("0123456789abcdef0123456789abcdef01234567")}
+	gateway := &fakePullRequestGateway{pullRequest: pullRequest}
+	gateway.onCheckout = func(branch github.Branch) {
+		git.register(git.addCalls[len(git.addCalls)-1], worktree.Branch(branch))
+	}
+	service := app.NewPullRequestService(git, gateway)
+	_, createError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123")})
+	require.NoError(t, createError)
+	gateway.checkoutError = errors.New("gh reset failed")
+
+	// When
+	_, forceError := service.Checkout(context.Background(), app.PullRequestInput{Project: projectResolution, Selector: github.PullRequestSelector("123"), Force: true})
+
+	// Then
+	var pullRequestError *app.PullRequestError
+	require.ErrorAs(t, forceError, &pullRequestError)
+	require.Equal(t, errs.External, pullRequestError.Class)
+	require.Nil(t, pullRequestError.Recovery)
+}
+
 func TestPullRequestService_preserves_unambiguous_identity_for_fork_metadata(t *testing.T) {
 	// Given
 	projectResolution := pullRequestProject(t)

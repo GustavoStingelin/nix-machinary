@@ -17,7 +17,11 @@ func (client Client) ResolvePullRequest(ctx context.Context, directory Directory
 }
 
 func (client Client) CheckoutPullRequest(ctx context.Context, request CheckoutRequest) error {
-	_, err := client.run(ctx, request.Directory, "pr", "checkout", string(request.Selector), "--branch", string(request.Branch))
+	arguments := []string{"pr", "checkout", string(request.Selector), "--branch", string(request.Branch)}
+	if request.Force {
+		arguments = append(arguments, "--force")
+	}
+	_, err := client.run(ctx, request.Directory, arguments...)
 	return err
 }
 

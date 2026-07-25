@@ -38,6 +38,9 @@ func NewPullRequestService(pullRequestGit PullRequestGit, pullRequestGateway Pul
 type PullRequestInput struct {
 	Project  project.Resolution
 	Selector github.PullRequestSelector
+	// Force resets an already-checked-out managed pull-request branch to the
+	// latest remote state instead of reusing the local version as-is.
+	Force bool
 }
 
 type PullRequestAction string

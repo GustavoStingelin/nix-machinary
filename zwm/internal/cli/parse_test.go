@@ -137,6 +137,20 @@ func TestRawGrammar_delegates_approved_input_when_values_are_valid(t *testing.T)
 				require.Equal(t, PullRequest{Selector: PullRequestSelector("https://github.com/org/repo/pull/123")}, invocation.Action)
 			},
 		},
+		{
+			name: "pull request selector with force flag",
+			args: []string{"wpr", "-f", "123"},
+			assertion: func(t *testing.T, invocation Invocation) {
+				require.Equal(t, PullRequest{Selector: PullRequestSelector("123"), Force: true}, invocation.Action)
+			},
+		},
+		{
+			name: "pull request selector with force flag after selector",
+			args: []string{"wpr", "123", "--force"},
+			assertion: func(t *testing.T, invocation Invocation) {
+				require.Equal(t, PullRequest{Selector: PullRequestSelector("123"), Force: true}, invocation.Action)
+			},
+		},
 	}
 
 	for _, test := range tests {

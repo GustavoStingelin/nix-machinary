@@ -42,6 +42,16 @@ func (service PullRequestService) Checkout(ctx context.Context, input PullReques
 	})
 	if branchExists {
 		if validation.Registration == worktree.RegistrationReusable && validation.Branch == worktree.BranchManaged {
+			if input.Force {
+				if err := service.github.CheckoutPullRequest(ctx, github.CheckoutRequest{
+					Directory: github.Directory(managedPath),
+					Selector:  input.Selector,
+					Branch:    github.Branch(branch),
+					Force:     true,
+				}); err != nil {
+					return PullRequestResult{}, pullRequestError(errs.External, "could not force-update pull request", err, "")
+				}
+			}
 			return PullRequestResult{Action: PullRequestReused, Branch: branch, Display: display, Number: pullRequest.Number, Worktree: managedPath}, nil
 		}
 		return PullRequestResult{}, pullRequestError(errs.Usage, "local branch '"+string(branch)+"' already exists", nil, "")

@@ -25,6 +25,9 @@ type CheckoutRequest struct {
 	Directory Directory
 	Selector  PullRequestSelector
 	Branch    Branch
+	// Force resets the existing local branch to the latest state of the pull
+	// request, discarding local commits (gh pr checkout --force).
+	Force bool
 }
 
 type Config struct {
