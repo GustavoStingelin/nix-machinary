@@ -66,6 +66,14 @@ zwm-mock:
 zwm-check: zwm-format zwm-test zwm-race zwm-vet zwm-mock
     GIT_MASTER=1 git diff --exit-code -- zwm/internal/mocks
 
+# Rebuild the vendored zwm-attn Zellij plugin WASM (needs the wasm32-wasip1
+# rust target: `rustup target add wasm32-wasip1`). Run after editing the plugin
+# source, then commit dist/zwm-attn.wasm.
+build-zwm-attn:
+    cd zellij-plugins/zwm-attn && cargo build --release --target wasm32-wasip1
+    cp zellij-plugins/zwm-attn/target/wasm32-wasip1/release/zwm-attn.wasm zellij-plugins/zwm-attn/dist/zwm-attn.wasm
+    @echo "Vendored zellij-plugins/zwm-attn/dist/zwm-attn.wasm"
+
 # Check flake
 check: zwm-check
     nix flake check

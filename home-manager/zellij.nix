@@ -9,6 +9,12 @@ let
     url = "https://github.com/laperlej/zellij-sessionizer/releases/download/v0.5.0/zellij-sessionizer.wasm";
     hash = "sha256-xBhBwCPnToH5mg/Y2V4FBO0gLfLNuSYE31HJ5OoLoFs=";
   };
+  # Vendored prebuilt WASM for our attention-indicator plugin. Source lives in
+  # zellij-plugins/zwm-attn/; rebuild with `just build-zwm-attn` after changes.
+  # (A Nix cross-build via pkgsCross.wasi32 requires compiling LLVM+rustc from
+  # source, which is impractical here, so the artifact is vendored like the
+  # upstream plugins above.)
+  zwm-attn = ../zellij-plugins/zwm-attn/dist/zwm-attn.wasm;
   mkTabTemplate = { showPwd ? true }: ''
     default_tab_template {
       pane size=1 borderless=true {
@@ -81,6 +87,13 @@ in
         root_dirs "${home}/code"
         session_layout "${home}/.config/zellij/layouts/sessionizer.kdl"
       }
+      zwm-attn location="file:${zwm-attn}"
+    }
+
+    # Load one headless zwm-attn instance per session so it can mark any tab
+    # with an attention glyph when an agent finishes / needs input.
+    load_plugins {
+      zwm-attn
     }
 
     keybinds {

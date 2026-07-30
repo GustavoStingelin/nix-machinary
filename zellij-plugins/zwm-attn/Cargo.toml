@@ -1,0 +1,13 @@
+[package]
+name = "zwm-attn"
+version = "0.1.0"
+edition = "2021"
+description = "Zellij plugin that marks a tab with an attention glyph when an agent finishes or needs input, and clears it on focus."
+
+[dependencies]
+zellij-tile = "0.44.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
