@@ -45,6 +45,7 @@
 
   home-manager.useGlobalPkgs = true;
   home-manager.useUserPackages = true;
+  home-manager.backupFileExtension = "backup";
   home-manager.users.head = {
     home.stateVersion = "25.05";
     home.enableNixpkgsReleaseCheck = false;
