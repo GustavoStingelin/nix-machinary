@@ -69,6 +69,7 @@
         ./home-manager/tuis.nix
         ./home-manager/zellij.nix
         ./home-manager/zwm.nix
+        ./home-manager/agents.nix
         ./home-manager/ruby.nix
       ];
 
