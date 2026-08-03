@@ -9,27 +9,106 @@ let
     exec ${pkgs.zwm}/bin/zwm attn "$@"
   '';
 
-  # opencode auto-loads local plugins from ~/.config/opencode/plugins/. This
-  # signals the three attention states: busy (working), permission prompts
-  # (waiting), and session-idle (finished/done). opencode.json stays hand-managed.
+  # opencode auto-loads local plugins from ~/.config/opencode/plugins/. Ported
+  # from herdr's agent-state plugin: it maps the full session lifecycle to the
+  # three attention states (working / waiting / finished), filters subagent
+  # (task) sessions so their lifecycle can't clobber the root agent's state, and
+  # serializes signals so the last event issued wins. opencode.json stays
+  # hand-managed.
   opencodePlugin = ''
-    import type { Plugin } from "@opencode-ai/plugin"
+    // Marks the Zellij tab with this opencode session's attention state, via the
+    // `zwm-attn` wrapper (a no-op outside Zellij).
+    export const ZwmAttnPlugin = async ({ $ }) => {
+      if (!process.env.ZELLIJ || !process.env.ZELLIJ_PANE_ID) return {}
 
-    // Marks the Zellij tab with this opencode session's attention state.
-    // Delegates to the `zwm-attn` wrapper, which no-ops outside Zellij.
-    export const ZwmAttnPlugin: Plugin = async ({ $ }) => ({
-      event: async ({ event }) => {
-        if (!process.env.ZELLIJ || !process.env.ZELLIJ_PANE_ID) return
-        let signal: string | undefined
-        if (event.type === "session.idle") signal = "finished"
-        else if (event.type === "session.status") {
-          const status = (event as any).properties?.status?.type
-          signal = status === "idle" ? "finished" : "working"
-        } else if (event.type === "permission.asked") signal = "waiting"
-        if (!signal) return
-        await $`zwm-attn ''${signal} --agent opencode`.quiet().nothrow()
-      },
-    })
+      // Serialize signals so the last event issued is the last one written.
+      let chain = Promise.resolve()
+      const signal = (state) => {
+        chain = chain
+          .then(() => $`zwm-attn ''${state} --agent opencode`.quiet().nothrow())
+          .catch(() => {})
+        return chain
+      }
+
+      // Subagent (task) sessions carry a parentID; drop their lifecycle events so
+      // they can't clobber the pane's root state, but still surface one that is
+      // blocked on the user.
+      const childSessions = new Set()
+
+      const stateFromStatus = (status) => {
+        const kind = typeof status === "string" ? status : status?.type
+        if (typeof kind !== "string") return undefined
+        switch (kind.toLowerCase()) {
+          case "idle":
+            return "finished"
+          case "active":
+          case "busy":
+          case "pending":
+          case "running":
+          case "streaming":
+          case "working":
+          case "retry":
+            return "working"
+          default:
+            return undefined
+        }
+      }
+
+      return {
+        "chat.message": async ({ sessionID }) => {
+          if (sessionID && childSessions.has(sessionID)) return
+          await signal("working")
+        },
+        event: async ({ event }) => {
+          const type = event?.type
+          const properties = event?.properties ?? {}
+          const sessionID =
+            typeof properties.sessionID === "string" ? properties.sessionID : undefined
+
+          const info = properties.info
+          if (info?.id && info.parentID) childSessions.add(info.id)
+
+          if (sessionID && childSessions.has(sessionID)) {
+            switch (type) {
+              case "permission.asked":
+              case "question.asked":
+                await signal("waiting")
+                break
+              case "permission.replied":
+              case "question.replied":
+              case "question.rejected":
+                await signal("working")
+                break
+            }
+            return
+          }
+
+          switch (type) {
+            case "session.status": {
+              const state = stateFromStatus(properties.status)
+              if (state) await signal(state)
+              break
+            }
+            case "tool.execute.before":
+            case "tool.execute.after":
+            case "permission.replied":
+            case "question.replied":
+            case "question.rejected":
+            case "session.compacted":
+              await signal("working")
+              break
+            case "permission.asked":
+            case "question.asked":
+            case "session.error":
+              await signal("waiting")
+              break
+            case "session.idle":
+              await signal("finished")
+              break
+          }
+        },
+      }
+    }
   '';
 
   # Claude Code reads ~/.claude/settings.json. Home Manager owns this file, so
