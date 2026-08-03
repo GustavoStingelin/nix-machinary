@@ -39,7 +39,10 @@ func (jumper *fakeJumper) JumpTo(_ context.Context, session, tab string) error {
 	return jumper.err
 }
 
-type commandCall struct{ op, project, arg string }
+type commandCall struct {
+	op, project, arg string
+	force            bool
+}
 
 type fakeCommander struct {
 	projects []string
@@ -68,8 +71,8 @@ func (commander *fakeCommander) CheckoutNew(_ context.Context, project, branch s
 	commander.calls = append(commander.calls, commandCall{op: "wco-new", project: project, arg: branch})
 	return commander.err
 }
-func (commander *fakeCommander) PullRequest(_ context.Context, project, selector string) error {
-	commander.calls = append(commander.calls, commandCall{op: "wpr", project: project, arg: selector})
+func (commander *fakeCommander) PullRequest(_ context.Context, project, selector string, force bool) error {
+	commander.calls = append(commander.calls, commandCall{op: "wpr", project: project, arg: selector, force: force})
 	return commander.err
 }
 
@@ -284,6 +287,20 @@ func TestPalette_wpr_scopes_to_the_tab_project(t *testing.T) {
 	send(t, m, key("enter"))
 
 	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "123"}}, commander.calls)
+}
+
+func TestPalette_wpr_ctrl_f_forces_the_checkout(t *testing.T) {
+	m, _ := loaded(t)
+	commander := m.commander.(*fakeCommander)
+
+	send(t, m, key("down")) // onto the "btcwallet" tab
+	send(t, m, key("p"))    // PR picker
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) // force-checkout the selected PR
+	require.NotNil(t, cmd)
+	require.IsType(t, commandDoneMsg{}, cmd())
+
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "123", force: true}}, commander.calls)
 }
 
 func TestPalette_w_on_a_session_header_falls_back_to_the_project_picker(t *testing.T) {

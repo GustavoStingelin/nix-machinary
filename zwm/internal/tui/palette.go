@@ -106,7 +106,13 @@ func (m *model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pick.moveCursor(1)
 		return m, nil
 	case tea.KeyEnter:
-		return m, m.selectPickerItem()
+		return m, m.selectPickerItem(false)
+	case tea.KeyCtrlF:
+		// Force applies only to the pull-request flow (wpr --force).
+		if m.pick.kind == pickPR {
+			return m, m.selectPickerItem(true)
+		}
+		return m, nil
 	case tea.KeyBackspace:
 		if len(m.pick.filter) > 0 {
 			m.pick.filter = m.pick.filter[:len(m.pick.filter)-1]
@@ -121,7 +127,7 @@ func (m *model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) selectPickerItem() tea.Cmd {
+func (m *model) selectPickerItem(force bool) tea.Cmd {
 	items := m.pick.visibleItems()
 	if m.pick.cursor < 0 || m.pick.cursor >= len(items) {
 		return nil
@@ -142,7 +148,7 @@ func (m *model) selectPickerItem() tea.Cmd {
 	case pickPRProject:
 		return m.openPicker(pickPR, "wpr: pull request in "+item.value, item.value, false)
 	case pickPR:
-		return m.runCommandCmd(func(ctx context.Context) error { return m.commander.PullRequest(ctx, project, item.value) })
+		return m.runCommandCmd(func(ctx context.Context) error { return m.commander.PullRequest(ctx, project, item.value, force) })
 	}
 	return nil
 }
@@ -231,7 +237,11 @@ func (m *model) pickerFooter() string {
 	if m.status != "" {
 		return errorStyle.Render(m.status)
 	}
-	return footerStyle.Render("type to filter · ↑/↓ move · enter select · esc back")
+	hint := "type to filter · ↑/↓ move · enter select · esc back"
+	if m.pick.kind == pickPR {
+		hint = "type to filter · ↑/↓ move · enter checkout · ctrl+f force · esc back"
+	}
+	return footerStyle.Render(hint)
 }
 
 // scrollOffset keeps cursor within [offset, offset+height) with minimal movement.

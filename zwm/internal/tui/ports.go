@@ -64,5 +64,7 @@ type Commander interface {
 	Open(ctx context.Context, project string) error
 	CheckoutExisting(ctx context.Context, project, branch string) error
 	CheckoutNew(ctx context.Context, project, branch string) error
-	PullRequest(ctx context.Context, project, selector string) error
+	// PullRequest checks out a PR worktree; force resets an existing managed
+	// worktree to the PR's latest remote state (wpr --force).
+	PullRequest(ctx context.Context, project, selector string, force bool) error
 }

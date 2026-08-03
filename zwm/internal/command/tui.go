@@ -62,8 +62,8 @@ func (commander tuiCommander) CheckoutNew(ctx context.Context, project, branch s
 	return commander.run(ctx, project, cli.CheckoutNew{Branch: cli.BranchName(branch)})
 }
 
-func (commander tuiCommander) PullRequest(ctx context.Context, project, selector string) error {
-	return commander.run(ctx, project, cli.PullRequest{Selector: cli.PullRequestSelector(selector)})
+func (commander tuiCommander) PullRequest(ctx context.Context, project, selector string, force bool) error {
+	return commander.run(ctx, project, cli.PullRequest{Selector: cli.PullRequestSelector(selector), Force: force})
 }
 
 func (commander tuiCommander) run(ctx context.Context, project string, action cli.Action) error {
