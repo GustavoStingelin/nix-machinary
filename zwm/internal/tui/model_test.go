@@ -138,11 +138,53 @@ func newTestModel() (*model, *fakeJumper) {
 	return newModel(context.Background(), source, jumper, commander, "bitcoin"), jumper
 }
 
+func loadData(t *testing.T, m *model, session string) {
+	t.Helper()
+	send(t, m, m.loadSessionDataCmd(session)())
+}
+
 func loaded(t *testing.T) (*model, *fakeJumper) {
 	t.Helper()
 	m, jumper := newTestModel()
 	send(t, m, sessionsLoadedMsg{sessions: m.source.(fakeSource).sessions})
+	// The runtime batches data loads for all non-exited sessions; drive them
+	// explicitly so the agents panel is populated.
+	loadData(t, m, "bitcoin")
+	loadData(t, m, "nix")
 	return m, jumper
+}
+
+func focusSession(t *testing.T, m *model, name string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selSession && m.sessions[row.session].name == name {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("session %q not among rows", name)
+}
+
+func focusTab(t *testing.T, m *model, title string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selTab && m.sessions[row.session].tabs[row.tab].Title == title {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("tab %q not among rows (expand its session first)", title)
+}
+
+func focusAgent(t *testing.T, m *model, label, tabTitle string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selAgent && m.agents[row.agent].label == label && m.agents[row.agent].tabTitle == tabTitle {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("agent %q@%q not among rows", label, tabTitle)
 }
 
 func TestModel_orders_current_first_then_open_then_exited(t *testing.T) {
@@ -170,7 +212,11 @@ func TestModel_auto_expands_the_current_session_on_load(t *testing.T) {
 
 func TestModel_places_agent_under_its_tab_and_unknown_at_session_level(t *testing.T) {
 	m, _ := loaded(t)
-	lines := strings.Split(m.View(), "\n")
+	// Look only at the sessions section, below the panel separator, so the
+	// panel's own copies of the agents don't confuse the ordering check.
+	_, sessions, found := strings.Cut(m.View(), "sessions ───")
+	require.True(t, found)
+	lines := strings.Split(sessions, "\n")
 
 	indexOf := func(needle string) int {
 		for i, line := range lines {
@@ -187,7 +233,6 @@ func TestModel_places_agent_under_its_tab_and_unknown_at_session_level(t *testin
 	firstTab := indexOf("btcwallet")
 
 	// opencode renders on the line immediately after its worktree tab.
-	require.Greater(t, opencode, worktreeTab)
 	require.Equal(t, worktreeTab+1, opencode)
 	// claude (unknown tab) renders at session level, above the first tab row.
 	require.Less(t, claude, firstTab)
@@ -195,7 +240,7 @@ func TestModel_places_agent_under_its_tab_and_unknown_at_session_level(t *testin
 
 func TestModel_enter_on_a_current_session_tab_jumps(t *testing.T) {
 	m, jumper := loaded(t)
-	send(t, m, key("down")) // cursor bitcoin -> first tab (btcwallet)
+	focusTab(t, m, "btcwallet")
 
 	_, cmd := m.Update(key("enter"))
 	require.NotNil(t, cmd)
@@ -206,12 +251,9 @@ func TestModel_enter_on_a_current_session_tab_jumps(t *testing.T) {
 func TestModel_enter_on_a_remote_session_tab_shows_a_hint_and_does_not_jump(t *testing.T) {
 	m, jumper := loaded(t)
 
-	// rows: bitcoin, editor, agent, nix, stale. Walk to nix and expand it.
-	send(t, m, key("down"))
-	send(t, m, key("down"))
-	send(t, m, key("down")) // on nix
-	send(t, m, key("right"))
-	send(t, m, key("down")) // on nix's shell tab
+	focusSession(t, m, "nix")
+	send(t, m, key("right")) // expand nix
+	focusTab(t, m, "nix-machinary")
 	send(t, m, key("enter"))
 
 	require.Empty(t, jumper.calls)
@@ -247,8 +289,8 @@ func TestPalette_wco_scopes_to_the_tab_project_and_creates_a_new_branch(t *testi
 	m, _ := loaded(t)
 	commander := m.commander.(*fakeCommander)
 
-	send(t, m, key("down")) // cursor onto the "btcwallet" tab
-	send(t, m, key("w"))    // scoped to btcwallet, no project prompt
+	focusTab(t, m, "btcwallet")
+	send(t, m, key("w")) // scoped to btcwallet, no project prompt
 	require.Equal(t, pickBranch, m.pick.kind)
 	require.Equal(t, "btcwallet", m.pick.project)
 
@@ -267,7 +309,7 @@ func TestPalette_wco_checks_out_an_existing_branch_in_the_tab_project(t *testing
 	m, _ := loaded(t)
 	commander := m.commander.(*fakeCommander)
 
-	send(t, m, key("down")) // onto the "btcwallet" tab
+	focusTab(t, m, "btcwallet")
 	send(t, m, key("w"))
 	typeString(t, m, "main")
 	send(t, m, key("enter"))
@@ -279,7 +321,7 @@ func TestPalette_wpr_scopes_to_the_tab_project(t *testing.T) {
 	m, _ := loaded(t)
 	commander := m.commander.(*fakeCommander)
 
-	send(t, m, key("down")) // onto the "btcwallet" tab
+	focusTab(t, m, "btcwallet")
 	send(t, m, key("p"))
 	require.Equal(t, pickPR, m.pick.kind)
 	require.Equal(t, "btcwallet", m.pick.project)
@@ -293,8 +335,8 @@ func TestPalette_wpr_ctrl_f_forces_the_checkout(t *testing.T) {
 	m, _ := loaded(t)
 	commander := m.commander.(*fakeCommander)
 
-	send(t, m, key("down")) // onto the "btcwallet" tab
-	send(t, m, key("p"))    // PR picker
+	focusTab(t, m, "btcwallet")
+	send(t, m, key("p")) // PR picker
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) // force-checkout the selected PR
 	require.NotNil(t, cmd)
@@ -306,8 +348,9 @@ func TestPalette_wpr_ctrl_f_forces_the_checkout(t *testing.T) {
 func TestPalette_w_on_a_session_header_falls_back_to_the_project_picker(t *testing.T) {
 	m, _ := loaded(t)
 
-	// Cursor is on the bitcoin session header, which is a workspace, not a
-	// project, so `w` opens the project picker rather than guessing.
+	// The bitcoin session header is a workspace, not a project, so `w` opens the
+	// project picker rather than guessing.
+	focusSession(t, m, "bitcoin")
 	send(t, m, key("w"))
 	require.Equal(t, modePicker, m.mode)
 	require.Equal(t, pickBranchProject, m.pick.kind)
@@ -317,15 +360,61 @@ func TestSelectedProject_derives_from_a_tab_title_only(t *testing.T) {
 	m, _ := loaded(t)
 
 	// A session header is a workspace, not a project.
+	focusSession(t, m, "bitcoin")
 	_, ok := m.selectedProject()
 	require.False(t, ok)
 
 	// A "<project>:<branch>" tab yields its project prefix.
-	send(t, m, key("down")) // onto "btcwallet"
-	send(t, m, key("down")) // onto "btcwallet:itests/very-first-itests"
+	focusTab(t, m, "btcwallet:itests/very-first-itests")
 	project, ok := m.selectedProject()
 	require.True(t, ok)
 	require.Equal(t, "btcwallet", project)
+}
+
+func TestModel_agents_panel_orders_by_waiting_then_working_then_done(t *testing.T) {
+	m, _ := loaded(t)
+
+	require.NotEmpty(t, m.agents)
+	require.Equal(t, StateWaiting, m.agents[0].state)
+	require.Equal(t, "claude", m.agents[0].label)
+	for i := 1; i < len(m.agents); i++ {
+		require.LessOrEqual(t, panelRank(m.agents[i-1].state), panelRank(m.agents[i].state))
+	}
+}
+
+func TestModel_agents_panel_has_cursor_priority_on_load(t *testing.T) {
+	m, _ := loaded(t)
+	row, ok := m.currentRow()
+	require.True(t, ok)
+	require.Equal(t, selAgent, row.kind)
+}
+
+func TestModel_enter_on_a_panel_agent_jumps_when_in_the_current_session(t *testing.T) {
+	m, jumper := loaded(t)
+	focusAgent(t, m, "opencode", "btcwallet:itests/very-first-itests")
+
+	_, cmd := m.Update(key("enter"))
+	require.NotNil(t, cmd)
+	require.IsType(t, jumpDoneMsg{}, cmd())
+	require.Equal(t, []jumpCall{{session: "bitcoin", tab: "btcwallet:itests/very-first-itests"}}, jumper.calls)
+}
+
+func TestModel_enter_on_a_panel_agent_in_another_session_hints(t *testing.T) {
+	m, jumper := loaded(t)
+	focusAgent(t, m, "opencode", "nix-machinary") // nix is not the current session
+
+	send(t, m, key("enter"))
+	require.Empty(t, jumper.calls)
+	require.Contains(t, strings.ToLower(m.status), "not supported")
+}
+
+func TestModel_enter_on_a_panel_agent_with_unknown_tab_hints(t *testing.T) {
+	m, jumper := loaded(t)
+	focusAgent(t, m, "claude", "") // unknown tab
+
+	send(t, m, key("enter"))
+	require.Empty(t, jumper.calls)
+	require.Contains(t, strings.ToLower(m.status), "unknown")
 }
 
 func TestPalette_esc_returns_to_the_tree(t *testing.T) {
@@ -339,10 +428,7 @@ func TestPalette_esc_returns_to_the_tree(t *testing.T) {
 func TestModel_exited_session_cannot_be_expanded(t *testing.T) {
 	m, _ := loaded(t)
 
-	// Walk to the exited session (last row) and try to expand it.
-	for range m.rows {
-		send(t, m, key("down"))
-	}
+	focusSession(t, m, "stale")
 	row, ok := m.currentRow()
 	require.True(t, ok)
 	require.True(t, m.sessions[row.session].exited)

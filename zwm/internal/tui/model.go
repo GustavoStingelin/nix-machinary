@@ -45,13 +45,25 @@ type selKind int
 const (
 	selSession selKind = iota
 	selTab
+	selAgent
 )
 
-// selection points at a navigable row: a session header, or a tab within one.
+// selection points at a navigable row: a session header, a tab within one, or an
+// entry in the top agents panel.
 type selection struct {
 	kind    selKind
 	session int
 	tab     int
+	agent   int
+}
+
+// agentEntry is one running agent in the top triage panel, flattened across all
+// sessions and ordered by how much it wants attention.
+type agentEntry struct {
+	session  string
+	tabTitle string
+	label    string
+	state    string
 }
 
 type model struct {
@@ -62,6 +74,7 @@ type model struct {
 	current   string
 
 	sessions []sessionState
+	agents   []agentEntry
 	rows     []selection
 	cursor   int
 	offset   int
@@ -137,7 +150,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if firstLoad {
 			m.expandCurrentInitially()
 		}
-		return m, m.refreshExpandedCmd()
+		return m, m.refreshDataCmd()
 	case sessionDataMsg:
 		m.applySessionData(msg)
 		return m, nil
@@ -208,10 +221,18 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // so a session header yields no project and the caller falls back to a picker.
 func (m *model) selectedProject() (string, bool) {
 	row, ok := m.currentRow()
-	if !ok || row.kind != selTab {
+	if !ok {
 		return "", false
 	}
-	title := m.sessions[row.session].tabs[row.tab].Title
+	var title string
+	switch row.kind {
+	case selTab:
+		title = m.sessions[row.session].tabs[row.tab].Title
+	case selAgent:
+		title = m.agents[row.agent].tabTitle
+	default:
+		return "", false
+	}
 	project, _, _ := strings.Cut(title, ":")
 	if project == "" {
 		return "", false
@@ -278,16 +299,17 @@ func (m *model) collapse() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	// Collapsing from a tab row returns focus to its session header.
-	if row.kind == selTab {
+	switch row.kind {
+	case selTab:
+		// Collapsing from a tab row returns focus to its session header.
 		m.sessions[row.session].expanded = false
 		m.rebuildRows()
 		m.selectSession(row.session)
-		return nil
-	}
-	if m.sessions[row.session].expanded {
-		m.sessions[row.session].expanded = false
-		m.rebuildRows()
+	case selSession:
+		if m.sessions[row.session].expanded {
+			m.sessions[row.session].expanded = false
+			m.rebuildRows()
+		}
 	}
 	return nil
 }
@@ -308,16 +330,31 @@ func (m *model) activate() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if row.kind == selSession {
+	switch row.kind {
+	case selAgent:
+		entry := m.agents[row.agent]
+		return m.jumpTo(entry.session, entry.tabTitle)
+	case selSession:
 		return m.toggle()
+	case selTab:
+		session := m.sessions[row.session]
+		return m.jumpTo(session.name, session.tabs[row.tab].Title)
 	}
-	session := m.sessions[row.session]
-	tab := session.tabs[row.tab]
-	if !session.current {
-		m.status = fmt.Sprintf("cross-session jump to %q is not supported yet", session.name)
+	return nil
+}
+
+// jumpTo focuses a tab, guarding the two cases the Zellij 0.43.1 CLI can't do:
+// an unknown tab, and a tab in another session.
+func (m *model) jumpTo(session, tab string) tea.Cmd {
+	if tab == "" {
+		m.status = "this agent's tab is unknown — cannot jump"
 		return nil
 	}
-	return m.jumpCmd(session.name, tab.Title)
+	if session != m.current {
+		m.status = fmt.Sprintf("cross-session jump to %q is not supported yet", session)
+		return nil
+	}
+	return m.jumpCmd(session, tab)
 }
 
 // mergeSessions reconciles a fresh session list into the model, preserving the
@@ -345,6 +382,7 @@ func (m *model) mergeSessions(fresh []SessionView) {
 		return sessionRank(next[i]) < sessionRank(next[j])
 	})
 	m.sessions = next
+	m.buildAgents()
 	m.rebuildRows()
 }
 
@@ -359,14 +397,13 @@ func sessionRank(session sessionState) int {
 	}
 }
 
-// expandCurrentInitially opens the current session and puts the cursor on it, so
-// the dashboard lands ready to navigate the session you're already in.
+// expandCurrentInitially opens the current session so its tabs show on load. The
+// cursor stays at the top, where the agents panel takes priority.
 func (m *model) expandCurrentInitially() {
 	for i := range m.sessions {
 		if m.sessions[i].current {
 			m.sessions[i].expanded = true
 			m.rebuildRows()
-			m.selectSession(i)
 			return
 		}
 	}
@@ -378,18 +415,20 @@ func (m *model) applySessionData(msg sessionDataMsg) {
 			m.sessions[i].tabs = msg.tabs
 			m.sessions[i].agents = msg.agents
 			m.sessions[i].loaded = true
+			m.buildAgents()
 			m.rebuildRows()
 			return
 		}
 	}
 }
 
-// refreshExpandedCmd reloads tabs+agents for every expanded session so live
-// state (new attention, closed tabs) shows on the periodic tick.
-func (m *model) refreshExpandedCmd() tea.Cmd {
+// refreshDataCmd reloads tabs+agents for every non-exited session so the agents
+// panel and the tree show live state (new attention, closed tabs) on each tick.
+// All sessions load, not just expanded ones, because the panel spans them all.
+func (m *model) refreshDataCmd() tea.Cmd {
 	var cmds []tea.Cmd
 	for _, session := range m.sessions {
-		if session.expanded {
+		if !session.exited {
 			cmds = append(cmds, m.loadSessionDataCmd(session.name))
 		}
 	}
@@ -403,10 +442,59 @@ func (m *model) refreshExpandedCmd() tea.Cmd {
 	}
 }
 
-// rebuildRows recomputes the navigable rows (session headers, plus tab rows for
-// expanded sessions) and keeps the cursor in range.
+// buildAgents flattens every non-exited session's agents into the triage panel,
+// ordered by attention: waiting for you, then working, then done.
+func (m *model) buildAgents() {
+	entries := make([]agentEntry, 0)
+	for _, session := range m.sessions {
+		if session.exited {
+			continue
+		}
+		for _, agent := range session.agents {
+			label := agent.Agent
+			if label == "" {
+				label = "pane " + agent.PaneID
+			}
+			entries = append(entries, agentEntry{
+				session:  session.name,
+				tabTitle: agent.TabTitle,
+				label:    label,
+				state:    agent.State,
+			})
+		}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if ri, rj := panelRank(entries[i].state), panelRank(entries[j].state); ri != rj {
+			return ri < rj
+		}
+		return entries[i].tabTitle < entries[j].tabTitle
+	})
+	m.agents = entries
+}
+
+// panelRank orders the agents panel: waiting for you first, then working, then
+// done (finished but unreviewed).
+func panelRank(state string) int {
+	switch state {
+	case StateWaiting:
+		return 0
+	case StateWorking:
+		return 1
+	case StateDone:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// rebuildRows recomputes the navigable rows: the agents panel first (so it has
+// priority for the cursor), then session headers and the tab rows of expanded
+// sessions. Keeps the cursor in range.
 func (m *model) rebuildRows() {
-	rows := make([]selection, 0, len(m.sessions))
+	rows := make([]selection, 0, len(m.agents)+len(m.sessions))
+	for agentIndex := range m.agents {
+		rows = append(rows, selection{kind: selAgent, agent: agentIndex})
+	}
 	for sessionIndex, session := range m.sessions {
 		rows = append(rows, selection{kind: selSession, session: sessionIndex})
 		if session.expanded {

@@ -21,7 +21,7 @@ func (m *model) View() string {
 	body := m.window(lines)
 
 	var out strings.Builder
-	out.WriteString(titleStyle.Render("zwm") + dimStyle.Render(" · sessions"))
+	out.WriteString(titleStyle.Render("zwm"))
 	out.WriteByte('\n')
 	for _, line := range body {
 		out.WriteString(line)
@@ -36,6 +36,19 @@ func (m *model) View() string {
 func (m *model) displayLines() []displayLine {
 	lines := make([]displayLine, 0)
 	row := 0
+
+	// Agents panel: all running agents across sessions, ordered by attention, so
+	// jumping between the ones that need you is one section at the top.
+	if len(m.agents) > 0 {
+		lines = append(lines, displayLine{text: titleStyle.Render("agents"), row: -1})
+		for _, entry := range m.agents {
+			selected := m.cursor == row
+			lines = append(lines, displayLine{text: renderAgentEntry(entry, m.current, selected), row: row})
+			row++
+		}
+		lines = append(lines, displayLine{text: dimStyle.Render("─── sessions ───"), row: -1})
+	}
+
 	for _, session := range m.sessions {
 		selected := m.cursor == row
 		lines = append(lines, displayLine{text: m.renderSession(session, selected), row: row})
@@ -138,6 +151,24 @@ func renderAgent(agent AgentView, indent string) string {
 		label = "pane " + agent.PaneID
 	}
 	return indent + style.Render(stateGlyph(agent.State)+" "+label+"  "+phrase)
+}
+
+// renderAgentEntry renders a triage-panel row: the agent's state and label, then
+// where it lives (its tab, prefixed with the session when it isn't the current
+// one, so cross-session agents are legible even though jumping to them is not yet
+// supported).
+func renderAgentEntry(entry agentEntry, current string, selected bool) string {
+	style, phrase := stateStyle(entry.state)
+	location := entry.tabTitle
+	if location == "" {
+		location = "?"
+	}
+	if entry.session != current {
+		location = entry.session + " · " + location
+	}
+	return gutter(selected) +
+		style.Render(stateGlyph(entry.state)+" "+entry.label+"  "+phrase) +
+		"  " + dimStyle.Render(location)
 }
 
 func renderTab(tab TabView, selected bool) string {
