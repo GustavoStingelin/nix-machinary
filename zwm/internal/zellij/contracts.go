@@ -16,8 +16,10 @@ const (
 type EnvironmentVariable string
 
 const (
-	EnvironmentHome   EnvironmentVariable = "HOME"
-	EnvironmentZellij EnvironmentVariable = "ZELLIJ"
+	EnvironmentHome              EnvironmentVariable = "HOME"
+	EnvironmentZellij            EnvironmentVariable = "ZELLIJ"
+	EnvironmentZellijSessionName EnvironmentVariable = "ZELLIJ_SESSION_NAME"
+	EnvironmentZellijPaneID      EnvironmentVariable = "ZELLIJ_PANE_ID"
 )
 
 type Config struct {

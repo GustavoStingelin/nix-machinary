@@ -26,13 +26,9 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 	}
 
 	if hasExactTabName(tabNames.Stdout, input.Title) {
-		command := Command{
-			Name: CommandZellij,
-			Args: []string{"action", "go-to-tab-name", string(input.Title)},
-		}
-		output, focusErr := config.Runner.Run(ctx, command)
+		output, focusErr := GoToTab(ctx, config, string(input.Title))
 		if focusErr != nil {
-			return Result{}, externalFailure("focus Zellij tab", command, output, focusErr)
+			return Result{}, focusErr
 		}
 		return Result{Action: Focused, Title: input.Title, Cwd: input.Cwd, Output: output}, nil
 	}
