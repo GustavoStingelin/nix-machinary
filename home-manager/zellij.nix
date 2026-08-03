@@ -90,13 +90,27 @@ in
       zwm-attn location="file:${zwm-attn}"
     }
 
-    # Load one headless zwm-attn instance per session so it can mark any tab
-    # with an attention glyph when an agent finishes / needs input.
+    // Load one headless zwm-attn instance per session so it can mark any tab
+    // with an attention glyph when an agent finishes / needs input.
     load_plugins {
       zwm-attn
     }
 
     keybinds {
+      // Ctrl+y opens the zwm session dashboard in a floating pane. It closes on
+      // exit, so after you jump to a tab (or quit) the overlay disappears. Bound
+      // in shared_except "locked" so it works from normal mode without a prefix;
+      // normal mode leaves j/k/enter/q for the TUI. Note: Ctrl+m is byte-identical
+      // to Enter, which is why the chord is Ctrl+y.
+      shared_except "locked" {
+        bind "Ctrl y" {
+          Run "zwm" "tui" {
+            floating true
+            close_on_exit true
+            name "zwm-tui"
+          }
+        }
+      }
       tmux {
         bind "g" {
           LaunchOrFocusPlugin "zellij-sessionizer" {
