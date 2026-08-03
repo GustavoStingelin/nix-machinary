@@ -12,6 +12,8 @@ type Config struct {
 	Arguments []string
 	Service   Service
 	Completer Completer
+	Attn      AttnRecorder
+	TUI       TUIRunner
 	Stdout    io.Writer
 	Stderr    io.Writer
 }

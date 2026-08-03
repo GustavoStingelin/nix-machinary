@@ -14,6 +14,7 @@ const (
 	projectFlagName = "project"
 	newBranchFlag   = "b"
 	forceFlag       = "force"
+	agentFlagName   = "agent"
 )
 
 // newCommand builds the urfave/cli command tree. Flag and subcommand parsing is
@@ -37,10 +38,11 @@ func newCommand(config Config, result *Result) *urfave.Command {
 				Usage:   "select a project before the subcommand",
 			},
 		},
-		// Reached only when the first argument matches no subcommand.
-		Action: func(_ context.Context, cmd *urfave.Command) error {
+		// Bare `zwm` opens the dashboard; a first argument that matches no
+		// subcommand is still a usage error.
+		Action: func(ctx context.Context, cmd *urfave.Command) error {
 			if cmd.NArg() == 0 {
-				return usageError("missing subcommand")
+				return launchTUI(ctx, config)
 			}
 			return usageError("unknown subcommand '" + cmd.Args().First() + "'")
 		},
@@ -48,6 +50,8 @@ func newCommand(config Config, result *Result) *urfave.Command {
 			checkoutCommand(config, result),
 			openCommand(config, result),
 			pullRequestCommand(config, result),
+			attnCommand(config),
+			tuiCommand(config),
 		},
 	}
 
@@ -179,6 +183,57 @@ func pullRequestCommand(config Config, result *Result) *urfave.Command {
 			return execute(ctx, config, result, project(cmd), PullRequest{Selector: PullRequestSelector(arguments[0]), Force: cmd.Bool(forceFlag)})
 		},
 	}
+}
+
+// attnCommand records an agent attention state for the current pane. It is
+// hidden because it is called by editor hooks (Claude Code, opencode), not typed
+// by a user, and it deliberately bypasses the git/gh/project preflight since it
+// needs only Zellij.
+func attnCommand(config Config) *urfave.Command {
+	return &urfave.Command{
+		Name:      "attn",
+		Usage:     "record agent attention state for the current pane",
+		ArgsUsage: "<working|waiting|done>",
+		Hidden:    true,
+		HideHelp:  true,
+		Flags: []urfave.Flag{
+			&urfave.StringFlag{Name: agentFlagName, Usage: "agent name to attribute the state to"},
+		},
+		Action: func(ctx context.Context, cmd *urfave.Command) error {
+			arguments := cmd.Args().Slice()
+			if len(arguments) == 0 || arguments[0] == "" {
+				return usageError("attn requires a state")
+			}
+			if len(arguments) != 1 {
+				return usageError("attn accepts exactly one state")
+			}
+			if config.Attn == nil {
+				return nil
+			}
+			return config.Attn.Record(ctx, arguments[0], cmd.String(agentFlagName))
+		},
+	}
+}
+
+// tuiCommand opens the session dashboard. It is also what bare `zwm` runs.
+func tuiCommand(config Config) *urfave.Command {
+	return &urfave.Command{
+		Name:     "tui",
+		Usage:    "open the Zellij session dashboard",
+		HideHelp: true,
+		Action: func(ctx context.Context, cmd *urfave.Command) error {
+			return launchTUI(ctx, config)
+		},
+	}
+}
+
+// launchTUI hands the terminal to the dashboard. When no TUI is wired (e.g. in
+// tests) bare `zwm` keeps its historical usage error.
+func launchTUI(ctx context.Context, config Config) error {
+	if config.TUI == nil {
+		return usageError("missing subcommand")
+	}
+	return config.TUI.Run(ctx)
 }
 
 func project(cmd *urfave.Command) ProjectNameOrPath {

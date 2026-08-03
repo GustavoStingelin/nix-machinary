@@ -19,6 +19,7 @@ const expectedHelp = "NAME:\n" +
 	"   wco  check out a branch in a worktree\n" +
 	"   o    open a project\n" +
 	"   wpr  check out a pull request in a worktree\n" +
+	"   tui  open the Zellij session dashboard\n" +
 	"\n" +
 	"GLOBAL OPTIONS:\n" +
 	"   --project string, -C string  select a project before the subcommand\n" +

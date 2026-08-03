@@ -34,6 +34,7 @@ COMMANDS:
    wco  check out a branch in a worktree
    o    open a project
    wpr  check out a pull request in a worktree
+   tui  open the Zellij session dashboard
 
 GLOBAL OPTIONS:
    --project string, -C string  select a project before the subcommand

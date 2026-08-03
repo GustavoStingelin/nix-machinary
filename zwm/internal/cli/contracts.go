@@ -83,6 +83,20 @@ type Service interface {
 	Execute(context.Context, Invocation) (Result, error)
 }
 
+// AttnRecorder records an agent's attention state for the current Zellij pane
+// and raises the tab glyph. It is a no-op outside a Zellij session and produces
+// no Result, so it never touches the key=value stdout contract.
+type AttnRecorder interface {
+	Record(ctx context.Context, signal, agent string) error
+}
+
+// TUIRunner takes over the terminal to render the session dashboard and performs
+// any selected jump as a side effect. It returns no Result and renders off
+// stdout, so it never touches the key=value stdout contract.
+type TUIRunner interface {
+	Run(ctx context.Context) error
+}
+
 // Completer supplies shell-completion candidates for the interactive commands.
 // Every method is best-effort: implementations return an empty slice rather than
 // an error so a failed lookup never disrupts the shell.

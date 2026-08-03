@@ -18,6 +18,8 @@ func main() {
 		Arguments: os.Args[1:],
 		Service:   command.NewSystemService(),
 		Completer: command.NewSystemCompleter(),
+		Attn:      command.NewSystemAttnRecorder(),
+		TUI:       command.NewSystemTUI(),
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 	}))
