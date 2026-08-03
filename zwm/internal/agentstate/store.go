@@ -2,6 +2,7 @@ package agentstate
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,16 @@ func (store *Store) Write(record Record) error {
 		return err
 	}
 	return os.Rename(tempPath, filepath.Join(sessionDir, sanitize(record.PaneID)+".json"))
+}
+
+// Delete removes the record for a session+pane. A missing file is not an error,
+// so a stale agent can be forgotten idempotently.
+func (store *Store) Delete(session, paneID string) error {
+	path := filepath.Join(store.dir, sanitize(session), sanitize(paneID)+".json")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // Load reads every record under the base directory. Missing directory, and

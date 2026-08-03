@@ -116,15 +116,28 @@ func (source tuiSource) Tabs(ctx context.Context, session string) ([]tui.TabView
 	return views, nil
 }
 
-func (source tuiSource) Agents(_ context.Context, session string) ([]tui.AgentView, error) {
+func (source tuiSource) Agents(ctx context.Context, session string) ([]tui.AgentView, error) {
 	records, err := source.store.Load()
 	if err != nil {
 		return nil, err
 	}
+	// An agent whose tab has closed is dead. Reconcile against the session's live
+	// tabs and forget those records so a finished agent doesn't linger (and can't
+	// resurface if the same worktree tab is reopened later). Only reconcile when
+	// the tab query succeeds with a non-empty list, so a transient failure never
+	// deletes live state.
+	liveTabs, reconcile := source.liveTabTitles(ctx, session)
+
 	views := make([]tui.AgentView, 0)
 	for _, record := range records {
 		if record.Session != session {
 			continue
+		}
+		if reconcile && record.TabTitle != "" {
+			if _, live := liveTabs[record.TabTitle]; !live {
+				_ = source.store.Delete(record.Session, record.PaneID)
+				continue
+			}
 		}
 		views = append(views, tui.AgentView{
 			Agent:    record.Agent,
@@ -134,6 +147,21 @@ func (source tuiSource) Agents(_ context.Context, session string) ([]tui.AgentVi
 		})
 	}
 	return views, nil
+}
+
+// liveTabTitles returns the set of current tab titles for a session. The second
+// result is false when the query failed or returned nothing, signalling callers
+// not to treat records as stale on unreliable data.
+func (source tuiSource) liveTabTitles(ctx context.Context, session string) (map[string]struct{}, bool) {
+	tabs, err := zellij.QueryTabNames(ctx, source.config, session)
+	if err != nil || len(tabs) == 0 {
+		return nil, false
+	}
+	titles := make(map[string]struct{}, len(tabs))
+	for _, tab := range tabs {
+		titles[tab.Title] = struct{}{}
+	}
+	return titles, true
 }
 
 // tuiJumper focuses a tab in the current session. Cross-session switching is not
