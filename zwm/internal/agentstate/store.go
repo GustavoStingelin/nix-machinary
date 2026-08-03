@@ -68,6 +68,21 @@ func (store *Store) Write(record Record) error {
 	return os.Rename(tempPath, filepath.Join(sessionDir, sanitize(record.PaneID)+".json"))
 }
 
+// Read returns the record for a session+pane. The second result is false when no
+// (readable) record exists.
+func (store *Store) Read(session, paneID string) (Record, bool) {
+	path := filepath.Join(store.dir, sanitize(session), sanitize(paneID)+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Record{}, false
+	}
+	var record Record
+	if json.Unmarshal(data, &record) != nil {
+		return Record{}, false
+	}
+	return record, true
+}
+
 // Delete removes the record for a session+pane. A missing file is not an error,
 // so a stale agent can be forgotten idempotently.
 func (store *Store) Delete(session, paneID string) error {

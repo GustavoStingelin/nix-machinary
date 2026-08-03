@@ -78,6 +78,39 @@ func TestAttnRecord_persists_state_and_fires_glyph_pipe(t *testing.T) {
 	}, runner.commands[0].Args)
 }
 
+type countingTitler struct {
+	title string
+	calls int
+}
+
+func (titler *countingTitler) TabTitle(context.Context, string) string {
+	titler.calls++
+	return titler.title
+}
+
+func TestAttnRecord_caches_the_tab_title_across_signals(t *testing.T) {
+	// Given a recorder whose title reconstruction is expensive (git)
+	recorder, _, store := newTestAttnRecorder(t, serviceTestEnvironment{
+		zellij.EnvironmentZellij:            "0",
+		zellij.EnvironmentZellijSessionName: "bitcoin",
+		zellij.EnvironmentZellijPaneID:      "5",
+	})
+	titler := &countingTitler{title: "btcwallet:feature"}
+	recorder.titles = titler
+
+	// When the agent signals repeatedly (as opencode does per tool call)
+	require.NoError(t, recorder.Record(context.Background(), "working", "opencode"))
+	require.NoError(t, recorder.Record(context.Background(), "waiting", "opencode"))
+	require.NoError(t, recorder.Record(context.Background(), "done", "opencode"))
+
+	// Then the title is reconstructed once and reused, and the latest state wins.
+	require.Equal(t, 1, titler.calls)
+	record, ok := store.Read("bitcoin", "5")
+	require.True(t, ok)
+	require.Equal(t, "btcwallet:feature", record.TabTitle)
+	require.Equal(t, agentstate.Done, record.State)
+}
+
 func TestManagedPRSuffix_maps_pr_branches_and_ignores_others(t *testing.T) {
 	suffix, ok := managedPRSuffix("zwm/pr-42-abcd1234")
 	require.True(t, ok)

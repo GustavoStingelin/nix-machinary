@@ -76,7 +76,7 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 			Session:  sessionName,
 			PaneID:   paneID,
 			Agent:    agent,
-			TabTitle: recorder.tabTitle(ctx),
+			TabTitle: recorder.tabTitle(ctx, sessionName, paneID),
 			State:    state,
 		}); writeErr != nil {
 			return errs.Wrap(errs.External, "write attention state", writeErr)
@@ -99,7 +99,15 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 
 // tabTitle best-effort reconstructs the current pane's tab title; failures yield
 // "" so the agent simply falls back to a session-level row.
-func (recorder attnRecorder) tabTitle(ctx context.Context) string {
+//
+// Reconstruction runs git, and agents signal frequently (every tool call), so a
+// title already recorded for this pane is reused. A pane's worktree is stable,
+// and if its tab closes the reconciler deletes the record, so the next signal
+// recomputes a fresh title.
+func (recorder attnRecorder) tabTitle(ctx context.Context, session, paneID string) string {
+	if existing, ok := recorder.store.Read(session, paneID); ok && existing.TabTitle != "" {
+		return existing.TabTitle
+	}
 	if recorder.titles == nil {
 		return ""
 	}
