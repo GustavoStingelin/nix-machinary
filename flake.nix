@@ -196,6 +196,17 @@
         darwin-reapermac-eval = let
           dcfg = self.darwinConfigurations.reapermac;
         in builtins.seq dcfg.config.system.build.toplevel.drvPath (pkgs.writeText "darwin-reapermac-eval-ok" "ok");
+      }) // (nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+        # Parse-check the rendered Zellij config so a malformed keybind or a
+        # stray '#' comment (Zellij's KDL uses '//') fails the build instead of
+        # only surfacing when a fresh `zellij` refuses to start.
+        zellij-config-valid = pkgs.runCommand "zellij-config-valid" {
+          nativeBuildInputs = [ pkgs.zellij ];
+        } ''
+          export HOME="$(mktemp -d)"
+          zellij --config ${self.darwinConfigurations.reapermac.config.home-manager.users.head.xdg.configFile."zellij/config.kdl".source} setup --check
+          touch "$out"
+        '';
       }) // {
         zwm-all = pkgs.runCommand "zwm-all" {
           nativeBuildInputs = [ pkgs.zwm ];
