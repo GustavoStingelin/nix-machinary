@@ -12,7 +12,7 @@ buildGoModule {
   version = "0.1.0";
 
   src = ../zwm;
-  vendorHash = "sha256-l6Vj8wpyTSVwClWdiKZGoaJxx+IvR6AAJE58a5eRkTI=";
+  vendorHash = "sha256-486ChndLNCZnBhfyHss7/YA3SuV1uJUGaLLUxCkzxPI=";
 
   doCheck = true;
   nativeBuildInputs = [ makeWrapper ];

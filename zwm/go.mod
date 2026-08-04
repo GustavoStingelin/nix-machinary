@@ -7,6 +7,7 @@ toolchain go1.24.10
 tool github.com/vektra/mockery/v3
 
 require (
+	github.com/catppuccin/go v0.3.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/rogpeppe/go-internal v1.14.1

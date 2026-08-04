@@ -1,16 +1,26 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	catppuccin "github.com/catppuccin/go"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Colors come from the Catppuccin Mocha palette (matching the Zellij theme). The
+// "waiting for you" state uses the softer Maroon rather than the vivid Red, which
+// read too strong for a state you see often.
+var mocha = catppuccin.Mocha
+
+func color(c catppuccin.Color) lipgloss.Color { return lipgloss.Color(c.Hex) }
 
 var (
 	titleStyle   = lipgloss.NewStyle().Bold(true)
-	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	dimStyle     = lipgloss.NewStyle().Foreground(color(mocha.Overlay1()))
 	cursorStyle  = lipgloss.NewStyle().Reverse(true)
-	footerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	waitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("203")) // red: blocked on you
-	workingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))  // blue: busy
-	doneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("78"))  // green: finished
+	footerStyle  = lipgloss.NewStyle().Foreground(color(mocha.Overlay1()))
+	errorStyle   = lipgloss.NewStyle().Foreground(color(mocha.Red()))
+	waitingStyle = lipgloss.NewStyle().Foreground(color(mocha.Maroon())) // blocked on you
+	workingStyle = lipgloss.NewStyle().Foreground(color(mocha.Blue()))   // busy
+	doneStyle    = lipgloss.NewStyle().Foreground(color(mocha.Green()))  // finished
 )
 
 // stateStyle returns the color and human phrase for an attention state.
