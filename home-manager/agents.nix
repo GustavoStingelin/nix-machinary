@@ -16,10 +16,24 @@ let
   # serializes signals so the last event issued wins. opencode.json stays
   # hand-managed.
   opencodePlugin = ''
+    import { execFileSync } from "node:child_process"
+
     // Marks the Zellij tab with this opencode session's attention state, via the
     // `zwm-attn` wrapper (a no-op outside Zellij).
     export const ZwmAttnPlugin = async ({ $ }) => {
       if (!process.env.ZELLIJ || !process.env.ZELLIJ_PANE_ID) return {}
+
+      // When opencode exits (its tab/pane may stay open), forget the record so the
+      // dashboard doesn't keep showing a closed agent. Synchronous so it completes
+      // during process teardown.
+      process.once("exit", () => {
+        try {
+          execFileSync("zwm-attn", ["closed", "--agent", "opencode"], {
+            stdio: "ignore",
+            timeout: 2000,
+          })
+        } catch {}
+      })
 
       // Serialize signals so the last event issued is the last one written.
       let chain = Promise.resolve()
@@ -144,6 +158,13 @@ let
       Notification = [
         {
           hooks = [ { type = "command"; command = "zwm-attn waiting --agent claude"; } ];
+        }
+      ];
+      # When the session ends (Claude exits), forget the record so the dashboard
+      # doesn't keep showing a closed agent while its tab stays open.
+      SessionEnd = [
+        {
+          hooks = [ { type = "command"; command = "zwm-attn closed --agent claude"; } ];
         }
       ];
     };
