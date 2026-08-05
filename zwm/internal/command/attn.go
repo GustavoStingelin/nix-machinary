@@ -19,6 +19,10 @@ import (
 // never hang an editor hook, which fires on every turn.
 const glyphPipeTimeout = 3 * time.Second
 
+// closedSignal is the pseudo-state an editor's exit hook sends to forget its
+// pane's attention record.
+const closedSignal = "closed"
+
 // tabTitler reconstructs, for the pane's working directory, the Zellij tab title
 // zwm would have given the tab, so the dashboard can place the agent under it. It
 // returns "" when the tab can't be determined (non-repo, detached PR worktree).
@@ -61,13 +65,24 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 		return nil
 	}
 
+	sessionName, _ := recorder.env.Lookup(zellij.EnvironmentZellijSessionName)
+	paneID, _ := recorder.env.Lookup(zellij.EnvironmentZellijPaneID)
+
+	// "closed" means the agent process exited (its editor's exit hook), so forget
+	// the record — the pane/tab may still be open, so tab reconciliation can't
+	// catch this. No glyph pipe: piping would re-mark the tab, and the plugin
+	// clears the glyph itself on focus.
+	if signal == closedSignal {
+		if sessionName != "" && paneID != "" {
+			_ = recorder.store.Delete(sessionName, paneID)
+		}
+		return nil
+	}
+
 	state, err := agentstate.ParseState(signal)
 	if err != nil {
 		return errs.Wrap(errs.Usage, "record attention state", err)
 	}
-
-	sessionName, _ := recorder.env.Lookup(zellij.EnvironmentZellijSessionName)
-	paneID, _ := recorder.env.Lookup(zellij.EnvironmentZellijPaneID)
 
 	// Persisting needs both keys; without them the record can't be addressed, but
 	// the glyph pipe below still works, so fall through instead of erroring.

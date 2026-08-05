@@ -193,7 +193,7 @@ func attnCommand(config Config) *urfave.Command {
 	return &urfave.Command{
 		Name:      "attn",
 		Usage:     "record agent attention state for the current pane",
-		ArgsUsage: "<working|waiting|done>",
+		ArgsUsage: "<working|waiting|done|closed>",
 		Hidden:    true,
 		HideHelp:  true,
 		Flags: []urfave.Flag{

@@ -123,6 +123,27 @@ func TestManagedPRSuffix_maps_pr_branches_and_ignores_others(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestAttnRecord_closed_forgets_the_record_without_a_pipe(t *testing.T) {
+	// Given a recorded agent in a live session
+	recorder, runner, store := newTestAttnRecorder(t, serviceTestEnvironment{
+		zellij.EnvironmentZellij:            "0",
+		zellij.EnvironmentZellijSessionName: "bitcoin",
+		zellij.EnvironmentZellijPaneID:      "5",
+	})
+	require.NoError(t, recorder.Record(context.Background(), "done", "opencode"))
+	require.Len(t, runner.commands, 1) // the done glyph pipe
+
+	// When the agent process exits
+	err := recorder.Record(context.Background(), "closed", "opencode")
+
+	// Then the record is forgotten and no glyph pipe is fired (which would
+	// re-mark the tab).
+	require.NoError(t, err)
+	require.Len(t, runner.commands, 1)
+	_, ok := store.Read("bitcoin", "5")
+	require.False(t, ok)
+}
+
 func TestAttnRecord_rejects_an_unknown_state(t *testing.T) {
 	// Given a live session
 	recorder, runner, _ := newTestAttnRecorder(t, serviceTestEnvironment{
