@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nix eval *)",
+      "Bash(zellij setup *)",
+      "Bash(nix-instantiate --parse *)",
+      "Bash(zellij list-sessions *)"
+    ]
+  }
+}
