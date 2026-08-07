@@ -42,10 +42,23 @@
           inherit unstable;
           sparrow = unstable.sparrow;
         };
+      # zwm is a client of the Zellij sessions it drives, so it has to run the
+      # very same Zellij those sessions do: its wrapper pins zellij on PATH, and
+      # a skew leaves it querying the socket directory of a version nobody is
+      # running — every live session reads as exited. Overriding the package
+      # once here keeps the one consumer that installs Zellij (programs.zellij)
+      # and the one that calls it (the zwm wrapper) from ever drifting apart.
+      #
+      # Unstable is required because nixpkgs 25.05 ships 0.43.1, whose plugin
+      # rename_tab resolves its argument against an internal tab index rather
+      # than the documented display position; see zwm-attn's MIN_RENAME_VERSION.
+      overlay-zellij = final: prev: {
+        zellij = final.unstable.zellij;
+      };
       overlay-zwm = final: prev: {
         zwm = final.callPackage ./packages/zwm.nix { };
       };
-      overlays = [ overlay-unstable overlay-zwm ];
+      overlays = [ overlay-unstable overlay-zellij overlay-zwm ];
       linuxPkgs = import nixpkgs {
         system = linuxSystem;
         inherit overlays;
