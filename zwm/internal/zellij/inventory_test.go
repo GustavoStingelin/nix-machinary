@@ -34,7 +34,7 @@ func TestQueryTabNames_routes_to_the_named_session_and_strips_the_glyph(t *testi
 	// Given a session whose second tab carries the attention glyph
 	log := &callLog{}
 	runner := &fakeRunner{log: log, responses: []runResponse{
-		{output: Output{Stdout: "editor\n● agent\nlogs\n"}},
+		{output: Output{Stdout: "editor\n● agent\nlogs\n  seen\n"}},
 	}}
 
 	// When
@@ -46,11 +46,14 @@ func TestQueryTabNames_routes_to_the_named_session_and_strips_the_glyph(t *testi
 	}
 	assertEqual(t, Command{Name: CommandZellij, Args: []string{"--session", "bitcoin", "action", "query-tab-names"}}, runner.commands[0])
 
-	// ...and only the glyphed tab is flagged, with the glyph stripped from its title
+	// ...and only the glyphed tab is flagged, with the glyph stripped from its
+	// title. A tab whose mark was cleared keeps the blank marker in Zellij, so it
+	// reports the bare title and no attention.
 	assertEqual(t, []Tab{
 		{Title: "editor"},
 		{Title: "agent", NeedsAttention: true},
 		{Title: "logs"},
+		{Title: "seen"},
 	}, tabs)
 }
 

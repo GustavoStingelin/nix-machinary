@@ -9,9 +9,9 @@
 //! ```
 //!
 //! This plugin maps that pane id to its tab and prefixes the tab name with a
-//! glyph so it stands out in the (zjstatus) tab bar. The glyph is stripped
-//! automatically when the user focuses the tab — the glyph in the tab name is
-//! the entire state, so no bookkeeping is needed.
+//! glyph so it stands out in the (zjstatus) tab bar. Focusing the tab retires
+//! the glyph to a blank marker of the same width — the marker in the tab name
+//! is the entire state, so no bookkeeping is needed.
 //!
 //! The same pipe also serves `event=focus`, which focuses the pane instead of
 //! marking its tab. That exists because the Zellij 0.43.1 CLI can focus a tab
@@ -25,6 +25,14 @@ use zellij_tile::prelude::*;
 /// Leading marker added to a tab name. zjstatus renders the raw tab name, so
 /// this shows verbatim in the bar. The trailing space keeps it legible.
 const GLYPH: &str = "● ";
+
+/// What the glyph becomes once the user has seen it. Same display width as
+/// GLYPH, so clearing a mark does not shrink the tab and shove every tab to its
+/// right two columns across — the dot just vanishes in place. Removing the
+/// marker outright is tidier in the name but reflows the whole bar ~120ms after
+/// the tab is already focused, which reads as a glitch. The cost is a permanent
+/// two-column indent on any tab that has ever been marked.
+const CLEARED: &str = "  ";
 
 /// Pipe name the completion hooks address (`zellij pipe --name`).
 const PIPE_NAME: &str = "zwm-attn";
@@ -135,7 +143,13 @@ impl ZellijPlugin for State {
         if tab.active || tab.name.starts_with(GLYPH) {
             return false;
         }
-        rename_tab(display_position(index), format!("{GLYPH}{}", tab.name));
+        // Reuse the cleared slot when this tab has been marked before, so the
+        // name keeps its width instead of growing two columns per cycle.
+        let name = match tab.name.strip_prefix(CLEARED) {
+            Some(rest) => format!("{GLYPH}{rest}"),
+            None => format!("{GLYPH}{}", tab.name),
+        };
+        rename_tab(display_position(index), name);
         false
     }
 
@@ -161,7 +175,8 @@ impl State {
         }
     }
 
-    /// Strip the glyph from the currently focused tab, if present.
+    /// Retire the glyph on the currently focused tab, if present, leaving the
+    /// same-width CLEARED marker so the tab bar does not reflow.
     fn clear_focused(&self) {
         if !self.can_rename_tabs {
             return;
@@ -169,7 +184,7 @@ impl State {
         for (index, tab) in self.tabs.iter().enumerate() {
             if tab.active {
                 if let Some(stripped) = tab.name.strip_prefix(GLYPH) {
-                    rename_tab(display_position(index), stripped.to_string());
+                    rename_tab(display_position(index), format!("{CLEARED}{stripped}"));
                 }
             }
         }

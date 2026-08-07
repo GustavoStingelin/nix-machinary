@@ -6,9 +6,15 @@ import (
 )
 
 // attentionGlyph is the prefix the zwm-attn plugin prepends to a tab name when
-// an agent in that tab needs attention. It must stay byte-for-byte identical to
-// GLYPH in zellij-plugins/zwm-attn/src/main.rs.
-const attentionGlyph = "● "
+// an agent in that tab needs attention. clearedMarker is what the plugin leaves
+// behind once the user has seen it: the same display width, so the tab bar does
+// not reflow, which means a seen tab keeps a two-column indent forever. Both
+// must stay byte-for-byte identical to GLYPH and CLEARED in
+// zellij-plugins/zwm-attn/src/main.rs.
+const (
+	attentionGlyph = "● "
+	clearedMarker  = "  "
+)
 
 // Session is a Zellij session. Exited marks a dead session that survives only
 // for resurrection (Zellij's "EXITED - attach to resurrect").
@@ -103,6 +109,12 @@ func parseTabs(stdout string) []Tab {
 func parseTab(line string) Tab {
 	if stripped, ok := strings.CutPrefix(line, attentionGlyph); ok {
 		return Tab{Title: stripped, NeedsAttention: true}
+	}
+	// A tab whose mark has been cleared keeps the blank marker, so the title has
+	// to be recovered here too — otherwise Launch would miss the tab and open a
+	// second one carrying the same title.
+	if stripped, ok := strings.CutPrefix(line, clearedMarker); ok {
+		return Tab{Title: stripped}
 	}
 	return Tab{Title: line}
 }
