@@ -84,6 +84,7 @@
         ./home-manager/zwm.nix
         ./home-manager/agents.nix
         ./home-manager/ruby.nix
+        ./home-manager/project-justfiles.nix
       ];
 
       # Common configuration shared between systems
