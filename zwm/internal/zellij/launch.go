@@ -25,8 +25,8 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 		}, tabNames, err)
 	}
 
-	if hasExactTabName(tabNames.Stdout, input.Title) {
-		output, focusErr := GoToTab(ctx, config, string(input.Title))
+	if name, found := findTabName(tabNames.Stdout, input.Title); found {
+		output, focusErr := GoToTab(ctx, config, name)
 		if focusErr != nil {
 			return Result{}, focusErr
 		}
@@ -54,13 +54,21 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 	return Result{Action: Created, Title: input.Title, Cwd: input.Cwd, Output: output}, nil
 }
 
-func hasExactTabName(tabNames string, title TabTitle) bool {
+// findTabName locates an existing tab by title and returns the tab's current
+// name, which is what Zellij matches on. The two differ while zwm-attn marks
+// the tab: matching the raw name would miss a marked tab and create a second
+// tab with the same title, so the comparison uses the glyph-stripped title.
+func findTabName(tabNames string, title TabTitle) (string, bool) {
 	for tabName := range strings.SplitSeq(tabNames, "\n") {
-		if tabName == string(title) {
-			return true
+		tabName = strings.TrimRight(tabName, "\r")
+		if tabName == "" {
+			continue
+		}
+		if parseTab(tabName).Title == string(title) {
+			return tabName, true
 		}
 	}
-	return false
+	return "", false
 }
 
 func externalFailure(message string, command Command, output Output, cause error) error {

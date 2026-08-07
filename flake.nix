@@ -200,8 +200,10 @@
         # Parse-check the rendered Zellij config so a malformed keybind or a
         # stray '#' comment (Zellij's KDL uses '//') fails the build instead of
         # only surfacing when a fresh `zellij` refuses to start.
+        # Check with the very package the config is rendered for, so a version
+        # bump that changes the config format fails here rather than at runtime.
         zellij-config-valid = pkgs.runCommand "zellij-config-valid" {
-          nativeBuildInputs = [ pkgs.zellij ];
+          nativeBuildInputs = [ self.darwinConfigurations.reapermac.config.home-manager.users.head.programs.zellij.package ];
         } ''
           export HOME="$(mktemp -d)"
           zellij --config ${self.darwinConfigurations.reapermac.config.home-manager.users.head.xdg.configFile."zellij/config.kdl".source} setup --check

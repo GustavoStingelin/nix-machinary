@@ -31,8 +31,21 @@ const PIPE_NAME: &str = "zwm-attn";
 
 /// `event=` value asking for a pane to be focused rather than for its tab to be
 /// marked. Every other value is an agent attention state (working/waiting/done).
-/// Must stay in sync with focusEvent in zwm/internal/zellij/inventory.go.
+/// Must stay in sync with focusEvent in zwm/internal/zellij/pipe.go.
 const FOCUS_EVENT: &str = "focus";
+
+/// First Zellij release where `rename_tab` addresses the tab at a *display
+/// position*, as its API documents.
+///
+/// Older hosts (0.43.x and down) resolve the argument against `screen.tabs`,
+/// a map keyed by an internal tab index: closing a non-last tab shifts every
+/// later tab's position down but leaves a permanent hole in the index keys, so
+/// the two numbers drift apart and a rename silently lands on an unrelated tab,
+/// overwriting its name. Upstream fixed it by switching to
+/// `get_tab_by_position_mut`. A plugin cannot see the internal index, so there
+/// is nothing to correct for — on an older host we simply don't rename. A tab
+/// missing its glyph is a nuisance; a tab that loses its name is data loss.
+const MIN_RENAME_VERSION: (u32, u32) = (0, 44);
 
 #[derive(Default)]
 struct State {
@@ -40,6 +53,8 @@ struct State {
     panes: PaneManifest,
     /// terminal pane id (matches `$ZELLIJ_PANE_ID`) -> tab display index (0-based)
     pane_to_tab: BTreeMap<u32, usize>,
+    /// Whether this host renames the tab we actually mean (see MIN_RENAME_VERSION).
+    can_rename_tabs: bool,
 }
 
 register_plugin!(State);
@@ -58,6 +73,16 @@ impl ZellijPlugin for State {
             EventType::PaneUpdate,
             EventType::PermissionRequestResult,
         ]);
+        let version = get_zellij_version();
+        self.can_rename_tabs = renames_by_position(&version);
+        if !self.can_rename_tabs {
+            eprintln!(
+                "zwm-attn: Zellij {version} renames tabs by internal index, \
+                 not by position — attention glyphs are disabled to avoid \
+                 renaming the wrong tab. Upgrade to {}.{}+.",
+                MIN_RENAME_VERSION.0, MIN_RENAME_VERSION.1
+            );
+        }
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -99,6 +124,9 @@ impl ZellijPlugin for State {
             focus_terminal_pane(pane_id, false, false);
             return false;
         }
+        if !self.can_rename_tabs {
+            return false;
+        }
         let Some(tab) = self.tabs.get(index) else {
             return false;
         };
@@ -135,6 +163,9 @@ impl State {
 
     /// Strip the glyph from the currently focused tab, if present.
     fn clear_focused(&self) {
+        if !self.can_rename_tabs {
+            return;
+        }
         for (index, tab) in self.tabs.iter().enumerate() {
             if tab.active {
                 if let Some(stripped) = tab.name.strip_prefix(GLYPH) {
@@ -148,4 +179,22 @@ impl State {
 /// `rename_tab` addresses tabs by 1-based position; our indices are 0-based.
 fn display_position(index: usize) -> u32 {
     index as u32 + 1
+}
+
+/// Whether the host's `rename_tab` targets a display position, i.e. whether it
+/// is at least MIN_RENAME_VERSION. Anything unparseable counts as too old, so a
+/// surprising version string costs a glyph rather than a tab name.
+fn renames_by_position(version: &str) -> bool {
+    let mut fields = version.trim().trim_start_matches('v').split('.');
+    let leading_number = |field: Option<&str>| -> Option<u32> {
+        let field = field?;
+        let digits = field
+            .split(|character: char| !character.is_ascii_digit())
+            .next()?;
+        digits.parse().ok()
+    };
+    match (leading_number(fields.next()), leading_number(fields.next())) {
+        (Some(major), Some(minor)) => (major, minor) >= MIN_RENAME_VERSION,
+        _ => false,
+    }
 }

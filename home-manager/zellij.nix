@@ -77,6 +77,13 @@ let
 in
 {
   programs.zellij.enable = true;
+  # nixpkgs 25.05 ships Zellij 0.43.1, whose plugin `rename_tab` resolves its
+  # argument against an internal tab index instead of the documented display
+  # position. Those diverge as soon as a non-last tab is closed (the index keys
+  # keep a hole, the positions shift down), so zwm-attn's attention glyph lands
+  # on an unrelated tab and overwrites its name. Fixed upstream in 0.44.x via
+  # get_tab_by_position_mut, so take Zellij from unstable.
+  programs.zellij.package = pkgs.unstable.zellij;
 
   xdg.configFile."zellij/config.kdl".text = ''
     pane_frames true
