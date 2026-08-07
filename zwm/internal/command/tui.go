@@ -164,17 +164,30 @@ func (source tuiSource) liveTabTitles(ctx context.Context, session string) (map[
 	return titles, true
 }
 
-// tuiJumper focuses a tab in the current session. Cross-session switching is not
-// available from the Zellij 0.43.1 CLI while attached, so it is refused for now.
+// tuiJumper focuses a tab — and, when the target names one, the pane inside it —
+// in the current session. Cross-session switching is not available from the
+// Zellij 0.43.1 CLI while attached, so it is refused for now.
 type tuiJumper struct {
 	config  zellij.Config
 	current string
 }
 
-func (jumper tuiJumper) JumpTo(ctx context.Context, session, tab string) error {
-	if session != jumper.current {
+func (jumper tuiJumper) JumpTo(ctx context.Context, target tui.JumpTarget) error {
+	if target.Session != jumper.current {
 		return errs.New(errs.External, "cross-session jump is not supported yet")
 	}
-	_, err := zellij.GoToTab(ctx, jumper.config, tab)
-	return err
+	if _, err := zellij.GoToTab(ctx, jumper.config, target.Tab); err != nil {
+		return err
+	}
+	if target.PaneID == "" {
+		return nil
+	}
+	// Land on the agent's own pane within the tab. The CLI has no pane-focus
+	// action, so this goes through the zwm-attn plugin, and it is best-effort:
+	// the tab is already focused, so a missing plugin or a pane that has since
+	// closed must not turn a good jump into an error.
+	focusCtx, cancel := context.WithTimeout(ctx, attnPipeTimeout)
+	defer cancel()
+	_, _ = zellij.FocusPane(focusCtx, jumper.config, target.PaneID)
+	return nil
 }

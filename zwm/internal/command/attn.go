@@ -15,9 +15,10 @@ import (
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
 )
 
-// glyphPipeTimeout bounds the cosmetic tab-glyph pipe so a wedged Zellij can
-// never hang an editor hook, which fires on every turn.
-const glyphPipeTimeout = 3 * time.Second
+// attnPipeTimeout bounds every zwm-attn pipe (the cosmetic tab glyph, the
+// dashboard's pane focus) so a wedged Zellij can never hang an editor hook,
+// which fires on every turn.
+const attnPipeTimeout = 3 * time.Second
 
 // closedSignal is the pseudo-state an editor's exit hook sends to forget its
 // pane's attention record.
@@ -100,15 +101,9 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 
 	// Fire the tab glyph best-effort: it is cosmetic, and a hook must not fail
 	// (or stall) because the plugin is missing or the pipe wedged.
-	pipeCtx, cancel := context.WithTimeout(ctx, glyphPipeTimeout)
+	pipeCtx, cancel := context.WithTimeout(ctx, attnPipeTimeout)
 	defer cancel()
-	_, _ = recorder.runner.Run(pipeCtx, zellij.Command{
-		Name: zellij.CommandZellij,
-		Args: []string{
-			"pipe", "--plugin", "zwm-attn", "--name", "zwm-attn",
-			"--args", "pane_id=" + paneID + ",event=" + string(state),
-		},
-	})
+	_, _ = recorder.runner.Run(pipeCtx, zellij.AttnPipe(paneID, string(state)))
 	return nil
 }
 

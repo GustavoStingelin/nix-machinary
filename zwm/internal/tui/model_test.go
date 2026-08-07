@@ -27,15 +27,15 @@ func (source fakeSource) Agents(_ context.Context, session string) ([]AgentView,
 	return source.agents[session], nil
 }
 
-type jumpCall struct{ session, tab string }
+type jumpCall struct{ session, tab, paneID string }
 
 type fakeJumper struct {
 	calls []jumpCall
 	err   error
 }
 
-func (jumper *fakeJumper) JumpTo(_ context.Context, session, tab string) error {
-	jumper.calls = append(jumper.calls, jumpCall{session, tab})
+func (jumper *fakeJumper) JumpTo(_ context.Context, target JumpTarget) error {
+	jumper.calls = append(jumper.calls, jumpCall{target.Session, target.Tab, target.PaneID})
 	return jumper.err
 }
 
@@ -389,14 +389,20 @@ func TestModel_agents_panel_has_cursor_priority_on_load(t *testing.T) {
 	require.Equal(t, selAgent, row.kind)
 }
 
-func TestModel_enter_on_a_panel_agent_jumps_when_in_the_current_session(t *testing.T) {
+func TestModel_enter_on_a_panel_agent_jumps_to_its_pane_in_the_current_session(t *testing.T) {
 	m, jumper := loaded(t)
 	focusAgent(t, m, "opencode", "btcwallet:itests/very-first-itests")
 
 	_, cmd := m.Update(key("enter"))
 	require.NotNil(t, cmd)
 	require.IsType(t, jumpDoneMsg{}, cmd())
-	require.Equal(t, []jumpCall{{session: "bitcoin", tab: "btcwallet:itests/very-first-itests"}}, jumper.calls)
+	// The agent's pane rides along, so the jump lands on the agent, not just on
+	// the tab hosting it.
+	require.Equal(t, []jumpCall{{
+		session: "bitcoin",
+		tab:     "btcwallet:itests/very-first-itests",
+		paneID:  "5",
+	}}, jumper.calls)
 }
 
 func TestModel_enter_on_a_panel_agent_in_another_session_hints(t *testing.T) {

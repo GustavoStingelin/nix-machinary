@@ -62,6 +62,7 @@ type selection struct {
 type agentEntry struct {
 	session  string
 	tabTitle string
+	paneID   string
 	label    string
 	state    string
 }
@@ -123,9 +124,9 @@ func (m *model) loadSessionDataCmd(session string) tea.Cmd {
 	}
 }
 
-func (m *model) jumpCmd(session, tab string) tea.Cmd {
+func (m *model) jumpCmd(target JumpTarget) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.jumper.JumpTo(m.ctx, session, tab); err != nil {
+		if err := m.jumper.JumpTo(m.ctx, target); err != nil {
 			return errMsg{err}
 		}
 		return jumpDoneMsg{}
@@ -333,28 +334,30 @@ func (m *model) activate() tea.Cmd {
 	switch row.kind {
 	case selAgent:
 		entry := m.agents[row.agent]
-		return m.jumpTo(entry.session, entry.tabTitle)
+		// Carry the agent's pane so the jump lands on the agent itself, not just
+		// on the tab hosting it.
+		return m.jumpTo(JumpTarget{Session: entry.session, Tab: entry.tabTitle, PaneID: entry.paneID})
 	case selSession:
 		return m.toggle()
 	case selTab:
 		session := m.sessions[row.session]
-		return m.jumpTo(session.name, session.tabs[row.tab].Title)
+		return m.jumpTo(JumpTarget{Session: session.name, Tab: session.tabs[row.tab].Title})
 	}
 	return nil
 }
 
-// jumpTo focuses a tab, guarding the two cases the Zellij 0.43.1 CLI can't do:
-// an unknown tab, and a tab in another session.
-func (m *model) jumpTo(session, tab string) tea.Cmd {
-	if tab == "" {
+// jumpTo focuses a target, guarding the two cases the Zellij 0.43.1 CLI can't
+// do: an unknown tab, and a tab in another session.
+func (m *model) jumpTo(target JumpTarget) tea.Cmd {
+	if target.Tab == "" {
 		m.status = "this agent's tab is unknown — cannot jump"
 		return nil
 	}
-	if session != m.current {
-		m.status = fmt.Sprintf("cross-session jump to %q is not supported yet", session)
+	if target.Session != m.current {
+		m.status = fmt.Sprintf("cross-session jump to %q is not supported yet", target.Session)
 		return nil
 	}
-	return m.jumpCmd(session, tab)
+	return m.jumpCmd(target)
 }
 
 // mergeSessions reconciles a fresh session list into the model, preserving the
@@ -458,6 +461,7 @@ func (m *model) buildAgents() {
 			entries = append(entries, agentEntry{
 				session:  session.name,
 				tabTitle: agent.TabTitle,
+				paneID:   agent.PaneID,
 				label:    label,
 				state:    agent.State,
 			})

@@ -12,6 +12,11 @@
 //! glyph so it stands out in the (zjstatus) tab bar. The glyph is stripped
 //! automatically when the user focuses the tab — the glyph in the tab name is
 //! the entire state, so no bookkeeping is needed.
+//!
+//! The same pipe also serves `event=focus`, which focuses the pane instead of
+//! marking its tab. That exists because the Zellij 0.43.1 CLI can focus a tab
+//! by name but not a pane by id, and the `zwm tui` dashboard wants Enter on an
+//! agent to land on the agent's own pane.
 
 use std::collections::BTreeMap;
 
@@ -23,6 +28,11 @@ const GLYPH: &str = "● ";
 
 /// Pipe name the completion hooks address (`zellij pipe --name`).
 const PIPE_NAME: &str = "zwm-attn";
+
+/// `event=` value asking for a pane to be focused rather than for its tab to be
+/// marked. Every other value is an agent attention state (working/waiting/done).
+/// Must stay in sync with focusEvent in zwm/internal/zellij/inventory.go.
+const FOCUS_EVENT: &str = "focus";
 
 #[derive(Default)]
 struct State {
@@ -82,6 +92,13 @@ impl ZellijPlugin for State {
         let Some(&index) = self.pane_to_tab.get(&pane_id) else {
             return false;
         };
+        // Focus requests are done here: focusing a pane switches to its tab and
+        // layer too, so the caller needs nothing else. Unknown ids never reach
+        // this point, so a stale record can't steal focus.
+        if message.args.get("event").map(String::as_str) == Some(FOCUS_EVENT) {
+            focus_terminal_pane(pane_id, false, false);
+            return false;
+        }
         let Some(tab) = self.tabs.get(index) else {
             return false;
         };

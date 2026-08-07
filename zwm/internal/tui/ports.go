@@ -1,6 +1,7 @@
 // Package tui renders the `zwm tui` session dashboard: open Zellij sessions,
 // their tabs, and the three-way attention state of the coding agents inside
-// them, with Enter to jump to a tab. It depends only on the consumer-owned ports
+// them, with Enter to jump to a tab (or straight to an agent's pane). It
+// depends only on the consumer-owned ports
 // below, so it never imports the Zellij or agent-state adapters directly.
 package tui
 
@@ -47,10 +48,20 @@ type Source interface {
 	Agents(ctx context.Context, session string) ([]AgentView, error)
 }
 
-// Jumper focuses a tab. Same-session jumps use go-to-tab-name; cross-session
-// jumps are not yet supported and return an error the model surfaces as a hint.
+// JumpTarget is where Enter should land: a tab, plus the pane inside it when
+// known. Agent rows carry the agent's own pane so the jump lands on it; tab
+// rows leave PaneID empty and stop at the tab.
+type JumpTarget struct {
+	Session string
+	Tab     string
+	PaneID  string
+}
+
+// Jumper focuses a jump target. Same-session jumps use go-to-tab-name and then
+// focus the pane; cross-session jumps are not yet supported and return an error
+// the model surfaces as a hint.
 type Jumper interface {
-	JumpTo(ctx context.Context, session, tab string) error
+	JumpTo(ctx context.Context, target JumpTarget) error
 }
 
 // Commander runs zwm's project commands from inside the dashboard. The listing
