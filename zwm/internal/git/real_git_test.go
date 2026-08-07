@@ -116,6 +116,15 @@ func runGit(t *testing.T, directory string, arguments ...string) []byte {
 
 	command := exec.Command("git", arguments...)
 	command.Dir = directory
+	// The fixtures must not inherit the developer's signing config: tag.gpgsign
+	// makes `git tag` reach for a GPG key, and with no terminal to drive pinentry
+	// that stalls until gpg times out and the test fails on ambient setup rather
+	// than on anything it is testing.
+	command.Env = append(os.Environ(),
+		"GIT_CONFIG_COUNT=2",
+		"GIT_CONFIG_KEY_0=commit.gpgsign", "GIT_CONFIG_VALUE_0=false",
+		"GIT_CONFIG_KEY_1=tag.gpgsign", "GIT_CONFIG_VALUE_1=false",
+	)
 	output, err := command.CombinedOutput()
 	require.NoErrorf(t, err, "git %s: %s", strings.Join(arguments, " "), output)
 	return output
