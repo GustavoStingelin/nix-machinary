@@ -5,7 +5,10 @@
 // below, so it never imports the Zellij or agent-state adapters directly.
 package tui
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Agent attention states, matching agentstate's vocabulary. Kept as plain
 // strings so this package stays free of other internal dependencies.
@@ -79,8 +82,12 @@ type Source interface {
 	// Reviews lists pull requests awaiting the user's review, in any order — the
 	// model sorts them. It is the slowest source (a GitHub search plus a
 	// per-pull-request ref lookup), so the model loads it on its own schedule
-	// rather than every tick.
+	// rather than every tick, and persists the result for CachedReviews.
 	Reviews(ctx context.Context) ([]ReviewView, error)
+	// CachedReviews returns the last persisted queue and when it was fetched,
+	// touching no network so the section has rows to draw immediately. ok is
+	// false when no usable cache exists.
+	CachedReviews(ctx context.Context) (reviews []ReviewView, fetchedAt time.Time, ok bool)
 }
 
 // JumpTarget is where Enter should land: a tab, plus the pane inside it when

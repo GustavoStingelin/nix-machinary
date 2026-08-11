@@ -96,6 +96,10 @@ func (source tuiSource) Reviews(ctx context.Context) ([]tui.ReviewView, error) {
 	return source.reviews.Reviews(ctx)
 }
 
+func (source tuiSource) CachedReviews(ctx context.Context) ([]tui.ReviewView, time.Time, bool) {
+	return source.reviews.CachedReviews(ctx)
+}
+
 func (source tuiSource) Sessions(ctx context.Context) ([]tui.SessionView, error) {
 	sessions, err := zellij.ListSessions(ctx, source.config)
 	if err != nil {

@@ -26,13 +26,33 @@ const refreshInterval = 5 * time.Second
 // it refreshes far less often than the local-state tick.
 const reviewInterval = 2 * time.Minute
 
+// spinnerInterval paces the refresh indicator. It only ticks while a fetch is in
+// flight, so it costs nothing when the dashboard is idle.
+const spinnerInterval = 120 * time.Millisecond
+
 // --- messages ---
 
 type sessionsLoadedMsg struct{ sessions []SessionView }
 
 type reviewsLoadedMsg struct{ reviews []ReviewView }
 
+// cachedReviewsMsg carries the queue restored from disk. It only fills an empty
+// section: a fetch that has already landed is newer, and must not be overwritten
+// by a cache read that happened to finish second.
+type cachedReviewsMsg struct {
+	reviews   []ReviewView
+	fetchedAt time.Time
+	ok        bool
+}
+
+// reviewsFailedMsg is separate from the generic errMsg so a failed fetch always
+// clears the refreshing flag — routing it through errMsg would leave the spinner
+// turning forever.
+type reviewsFailedMsg struct{ err error }
+
 type reviewTickMsg struct{}
+
+type spinnerTickMsg struct{}
 
 // browsedMsg reports a finished browser launch. Unlike the checkout commands it
 // does not quit the dashboard: opening a pull request is something you may want
@@ -115,6 +135,16 @@ type model struct {
 	// reviewsLoaded distinguishes "no review requests" from "not fetched yet", so
 	// the section can say which.
 	reviewsLoaded bool
+	// refreshing drives the spinner and, more importantly, stops a second fetch
+	// starting while one is in flight.
+	refreshing   bool
+	spinnerFrame int
+	// reviewsFetchedAt/reviewsFromCache let the header admit that the rows on
+	// screen came off disk and how old they are, rather than presenting a cached
+	// queue as current.
+	reviewsFetchedAt time.Time
+	reviewsFromCache bool
+	now              func() time.Time
 
 	mode      uiMode
 	pick      picker
@@ -127,11 +157,13 @@ type model struct {
 }
 
 func newModel(ctx context.Context, source Source, jumper Jumper, commander Commander, current string) *model {
-	return &model{ctx: ctx, source: source, jumper: jumper, commander: commander, current: current, height: 24, width: 80}
+	return &model{ctx: ctx, source: source, jumper: jumper, commander: commander, current: current, height: 24, width: 80, now: time.Now}
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.loadSessionsCmd(), m.loadReviewsCmd(), tickCmd(), reviewTickCmd())
+	// The cached queue is a local file read, so it lands almost immediately and
+	// the review section has rows while the fetch behind it is still running.
+	return tea.Batch(m.loadSessionsCmd(), m.loadCachedReviewsCmd(), m.beginReviewRefresh(), tickCmd(), reviewTickCmd())
 }
 
 // --- commands ---
@@ -185,10 +217,31 @@ func (m *model) loadReviewsCmd() tea.Cmd {
 	return func() tea.Msg {
 		reviews, err := m.source.Reviews(m.ctx)
 		if err != nil {
-			return errMsg{err}
+			return reviewsFailedMsg{err}
 		}
 		return reviewsLoadedMsg{reviews}
 	}
+}
+
+// loadCachedReviewsCmd restores the last fetched queue from disk. It is a local
+// read, so it is fast enough to fill the section before the fetch returns.
+func (m *model) loadCachedReviewsCmd() tea.Cmd {
+	return func() tea.Msg {
+		reviews, fetchedAt, ok := m.source.CachedReviews(m.ctx)
+		return cachedReviewsMsg{reviews: reviews, fetchedAt: fetchedAt, ok: ok}
+	}
+}
+
+// beginReviewRefresh starts a fetch and the spinner that reports it. It is a
+// no-op while one is already in flight, which keeps a manual `r` during the
+// periodic refresh from stacking a second fetch and a second spinner loop.
+func (m *model) beginReviewRefresh() tea.Cmd {
+	if m.refreshing {
+		return nil
+	}
+	m.refreshing = true
+	m.spinnerFrame = 0
+	return tea.Batch(m.loadReviewsCmd(), spinnerTickCmd())
 }
 
 func tickCmd() tea.Cmd {
@@ -197,6 +250,10 @@ func tickCmd() tea.Cmd {
 
 func reviewTickCmd() tea.Cmd {
 	return tea.Tick(reviewInterval, func(time.Time) tea.Msg { return reviewTickMsg{} })
+}
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(spinnerInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
 }
 
 // --- update ---
@@ -217,16 +274,43 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionDataMsg:
 		m.applySessionData(msg)
 		return m, nil
+	case cachedReviewsMsg:
+		// Only fills an empty section: if the fetch beat the cache read, the rows
+		// on screen are already fresher than anything on disk.
+		if msg.ok && !m.reviewsLoaded {
+			m.reviews = msg.reviews
+			sortReviews(m.reviews)
+			m.reviewsLoaded = true
+			m.reviewsFromCache = true
+			m.reviewsFetchedAt = msg.fetchedAt
+			m.rebuildRows()
+		}
+		return m, nil
 	case reviewsLoadedMsg:
 		m.reviews = msg.reviews
 		sortReviews(m.reviews)
 		m.reviewsLoaded = true
+		m.reviewsFromCache = false
+		m.reviewsFetchedAt = m.now()
+		m.refreshing = false
 		m.rebuildRows()
 		return m, nil
+	case reviewsFailedMsg:
+		// Keep whatever is on screen — cached or previously fetched. gh failing
+		// says nothing about whether those review requests still exist.
+		m.refreshing = false
+		m.status = msg.err.Error()
+		return m, nil
+	case spinnerTickMsg:
+		if !m.refreshing {
+			return m, nil // fetch finished: let the tick loop end
+		}
+		m.spinnerFrame++
+		return m, spinnerTickCmd()
 	case tickMsg:
 		return m, tea.Batch(m.loadSessionsCmd(), tickCmd())
 	case reviewTickMsg:
-		return m, tea.Batch(m.loadReviewsCmd(), reviewTickCmd())
+		return m, tea.Batch(m.beginReviewRefresh(), reviewTickCmd())
 	case browsedMsg:
 		// Stay in the dashboard either way, so the queue is still there to work
 		// through once the browser has the pull request.
@@ -288,7 +372,7 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.status = ""
-		return m, tea.Batch(m.loadSessionsCmd(), m.loadReviewsCmd())
+		return m, tea.Batch(m.loadSessionsCmd(), m.beginReviewRefresh())
 	case "enter":
 		return m, m.activate()
 	case "ctrl+f":

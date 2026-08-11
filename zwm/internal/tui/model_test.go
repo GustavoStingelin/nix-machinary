@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,9 @@ type fakeSource struct {
 	agents    map[string][]AgentView
 	reviews   []ReviewView
 	reviewErr error
+	cached    []ReviewView
+	cachedAt  time.Time
+	cachedOK  bool
 	// tabCalls, when set, records every session whose tabs were queried, in
 	// order. It is a pointer so the value receivers below can still append.
 	tabCalls *[]string
@@ -23,6 +27,10 @@ type fakeSource struct {
 
 func (source fakeSource) Reviews(context.Context) ([]ReviewView, error) {
 	return source.reviews, source.reviewErr
+}
+
+func (source fakeSource) CachedReviews(context.Context) ([]ReviewView, time.Time, bool) {
+	return source.cached, source.cachedAt, source.cachedOK
 }
 
 func (source fakeSource) Sessions(context.Context) ([]SessionView, error) {
@@ -837,4 +845,124 @@ func TestReviewQueue_applies_the_ordering_on_load(t *testing.T) {
 
 	require.Equal(t, []string{"1083", "1305", "3630"},
 		[]string{m.reviews[0].Number, m.reviews[1].Number, m.reviews[2].Number})
+}
+
+// --- cached queue and refresh indicator ---
+
+func cachedFixture() []ReviewView {
+	return []ReviewView{
+		{Number: "999", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "from the cache", Base: "master", Head: "old"},
+	}
+}
+
+func TestReviewQueue_cache_fills_the_section_before_the_fetch_lands(t *testing.T) {
+	m, _ := loaded(t)
+	fetchedAt := time.Now().Add(-3 * time.Minute)
+
+	send(t, m, cachedReviewsMsg{reviews: cachedFixture(), fetchedAt: fetchedAt, ok: true})
+
+	// Rows are on screen without any network call having returned.
+	require.True(t, m.reviewsLoaded)
+	require.True(t, m.reviewsFromCache)
+	require.Len(t, m.reviews, 1)
+	require.NotContains(t, m.View(), "loading…")
+	require.Contains(t, m.View(), "from the cache")
+}
+
+func TestReviewQueue_header_shows_the_cache_age_and_drops_it_once_fresh(t *testing.T) {
+	m, _ := loaded(t)
+	m.now = func() time.Time { return time.Unix(2_000, 0) }
+	send(t, m, cachedReviewsMsg{
+		reviews: cachedFixture(), fetchedAt: time.Unix(2_000, 0).Add(-2 * time.Hour), ok: true,
+	})
+
+	// Stale rows must not be presented as current, especially when gh is failing.
+	require.Contains(t, m.View(), "cached 2h ago")
+
+	send(t, m, reviewsLoadedMsg{reviews: reviewFixtures()})
+
+	require.NotContains(t, m.View(), "cached")
+	require.False(t, m.reviewsFromCache)
+}
+
+func TestReviewQueue_fetch_result_replaces_the_cached_rows(t *testing.T) {
+	m, _ := loaded(t)
+	send(t, m, cachedReviewsMsg{reviews: cachedFixture(), fetchedAt: time.Now(), ok: true})
+
+	send(t, m, reviewsLoadedMsg{reviews: reviewFixtures()})
+
+	require.Len(t, m.reviews, len(reviewFixtures()))
+	require.NotContains(t, m.View(), "from the cache")
+}
+
+func TestReviewQueue_a_late_cache_read_never_clobbers_a_landed_fetch(t *testing.T) {
+	m, _ := loaded(t)
+	send(t, m, reviewsLoadedMsg{reviews: reviewFixtures()})
+
+	// The disk read finishing second must not undo fresher rows.
+	send(t, m, cachedReviewsMsg{reviews: cachedFixture(), fetchedAt: time.Now(), ok: true})
+
+	require.Len(t, m.reviews, len(reviewFixtures()))
+	require.False(t, m.reviewsFromCache)
+	require.NotContains(t, m.View(), "from the cache")
+}
+
+func TestReviewQueue_absent_cache_leaves_the_section_loading(t *testing.T) {
+	m, _ := loaded(t)
+
+	send(t, m, cachedReviewsMsg{ok: false})
+
+	require.False(t, m.reviewsLoaded)
+	require.Contains(t, m.View(), "loading…")
+}
+
+func TestReviewQueue_spinner_turns_while_refreshing_and_stops_after(t *testing.T) {
+	m, _ := loaded(t)
+	require.NotNil(t, m.beginReviewRefresh())
+	require.True(t, m.refreshing)
+	require.Contains(t, m.View(), spinnerFrames[0])
+
+	// The tick keeps rescheduling itself only while a fetch is in flight.
+	_, cmd := m.Update(spinnerTickMsg{})
+	require.NotNil(t, cmd)
+	require.Equal(t, 1, m.spinnerFrame)
+
+	send(t, m, reviewsLoadedMsg{reviews: reviewFixtures()})
+	require.False(t, m.refreshing)
+
+	_, cmd = m.Update(spinnerTickMsg{})
+	require.Nil(t, cmd, "the spinner loop must end when the fetch does")
+}
+
+func TestReviewQueue_refresh_is_not_started_twice_while_one_is_in_flight(t *testing.T) {
+	m, _ := loaded(t)
+	require.NotNil(t, m.beginReviewRefresh())
+
+	// A manual r landing during the periodic refresh must not stack a second
+	// fetch or a second spinner loop.
+	require.Nil(t, m.beginReviewRefresh())
+}
+
+func TestReviewQueue_failed_fetch_stops_the_spinner_and_keeps_the_rows(t *testing.T) {
+	m, _ := loaded(t)
+	send(t, m, cachedReviewsMsg{reviews: cachedFixture(), fetchedAt: time.Now(), ok: true})
+	m.beginReviewRefresh()
+
+	send(t, m, reviewsFailedMsg{err: errBrowse})
+
+	// Being offline says nothing about whether those review requests still exist,
+	// so the cached rows stay — but the spinner must not turn forever.
+	require.False(t, m.refreshing)
+	require.Len(t, m.reviews, 1)
+	require.Contains(t, m.status, "no browser")
+	_, cmd := m.Update(spinnerTickMsg{})
+	require.Nil(t, cmd)
+}
+
+func TestHumanAge_reads_the_way_a_person_would_say_it(t *testing.T) {
+	require.Equal(t, "just now", humanAge(20*time.Second))
+	require.Equal(t, "5m ago", humanAge(5*time.Minute))
+	require.Equal(t, "3h ago", humanAge(3*time.Hour))
+	require.Equal(t, "2d ago", humanAge(50*time.Hour))
 }

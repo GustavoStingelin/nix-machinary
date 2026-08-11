@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type displayLine struct {
@@ -52,7 +53,7 @@ func (m *model) displayLines() []displayLine {
 
 	// Review queue: pull requests waiting on you, one Tab away from the agents
 	// panel. Rendered before the tree because it is a to-do list, not state.
-	lines = append(lines, displayLine{text: titleStyle.Render("review queue"), row: -1})
+	lines = append(lines, displayLine{text: m.reviewHeader(), row: -1})
 	switch {
 	case !m.reviewsLoaded:
 		lines = append(lines, displayLine{text: dimStyle.Render("  loading…"), row: -1})
@@ -196,6 +197,39 @@ func renderTab(tab TabView, selected bool) string {
 		marker = waitingStyle.Render("● ")
 	}
 	return gutter(selected) + "  " + marker + tab.Title
+}
+
+// spinnerFrames is the refresh indicator, reusing the half-circle already used
+// for a working agent so "something is running" reads the same everywhere.
+var spinnerFrames = []string{"◐", "◓", "◑", "◒"}
+
+// reviewHeader titles the section and says what state it is in: a turning circle
+// while a fetch is running, and — until the first fetch of this run lands — how
+// old the cached rows below it are. Showing the age matters when gh is failing:
+// without it a days-old queue would look current.
+func (m *model) reviewHeader() string {
+	header := titleStyle.Render("review queue")
+	if m.refreshing {
+		header += " " + workingStyle.Render(spinnerFrames[m.spinnerFrame%len(spinnerFrames)])
+	}
+	if m.reviewsFromCache && !m.reviewsFetchedAt.IsZero() {
+		header += dimStyle.Render("  cached " + humanAge(m.now().Sub(m.reviewsFetchedAt)))
+	}
+	return header
+}
+
+// humanAge renders a duration the way a person would say it.
+func humanAge(age time.Duration) string {
+	switch {
+	case age < time.Minute:
+		return "just now"
+	case age < time.Hour:
+		return fmt.Sprintf("%dm ago", int(age.Minutes()))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(age.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(age.Hours()/24))
+	}
 }
 
 // reviewNumberWidth pads pull request numbers into a column so repositories and

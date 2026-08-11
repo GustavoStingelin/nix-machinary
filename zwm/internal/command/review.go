@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/cli"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/errs"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/git"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/github"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/project"
+	"github.com/GustavoStingelin/nix-machinary/zwm/internal/reviewcache"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/tui"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/worktree"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
@@ -36,6 +38,7 @@ type reviewSource struct {
 	github github.Client
 	git    git.Client
 	env    zellij.Environment
+	cache  *reviewcache.Store
 }
 
 func newReviewSource() reviewSource {
@@ -43,7 +46,52 @@ func newReviewSource() reviewSource {
 		github: github.NewClient(github.Config{}),
 		git:    git.NewClient(git.Config{}),
 		env:    zellij.SystemEnvironment{},
+		cache:  reviewcache.NewStore(reviewcache.Path(os.LookupEnv)),
 	}
+}
+
+// CachedReviews returns the previously fetched queue without touching the
+// network, so the dashboard has rows to draw the moment it opens rather than an
+// empty panel for the second or so a GitHub round trip takes.
+func (source reviewSource) CachedReviews(context.Context) ([]tui.ReviewView, time.Time, bool) {
+	snapshot, ok := source.cache.Load()
+	if !ok {
+		return nil, time.Time{}, false
+	}
+	views := make([]tui.ReviewView, 0, len(snapshot.Reviews))
+	for _, review := range snapshot.Reviews {
+		views = append(views, tui.ReviewView{
+			Number:     review.Number,
+			Repository: review.Repository,
+			Project:    review.Project,
+			Title:      review.Title,
+			Author:     review.Author,
+			Base:       review.Base,
+			Head:       review.Head,
+			Worktree:   review.Worktree,
+			Stale:      review.Stale,
+		})
+	}
+	return views, snapshot.FetchedAt, true
+}
+
+// cacheSnapshot converts fetched rows into the cache's own record type.
+func cacheSnapshot(views []tui.ReviewView) reviewcache.Snapshot {
+	reviews := make([]reviewcache.Review, 0, len(views))
+	for _, view := range views {
+		reviews = append(reviews, reviewcache.Review{
+			Number:     view.Number,
+			Repository: view.Repository,
+			Project:    view.Project,
+			Title:      view.Title,
+			Author:     view.Author,
+			Base:       view.Base,
+			Head:       view.Head,
+			Worktree:   view.Worktree,
+			Stale:      view.Stale,
+		})
+	}
+	return reviewcache.Snapshot{Reviews: reviews}
 }
 
 // Reviews lists open pull requests awaiting the user's review. It is one GitHub
@@ -90,6 +138,9 @@ func (source reviewSource) Reviews(ctx context.Context) ([]tui.ReviewView, error
 		}(index, request)
 	}
 	group.Wait()
+	// Best-effort: a cache that cannot be written costs the next start a slow
+	// first render, which is not worth failing a good fetch over.
+	_ = source.cache.Save(cacheSnapshot(views))
 	return views, nil
 }
 
