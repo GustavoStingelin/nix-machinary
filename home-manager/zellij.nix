@@ -5,13 +5,28 @@ let
     url = "https://github.com/laperlej/zellij-sessionizer/releases/download/v0.5.0/zellij-sessionizer.wasm";
     hash = "sha256-xBhBwCPnToH5mg/Y2V4FBO0gLfLNuSYE31HJ5OoLoFs=";
   };
-  # Vendored prebuilt WASM for our attention-indicator plugin. Source lives in
-  # zellij-plugins/zwm-attn/; rebuild with `just build-zwm-attn` after changes.
-  # (A Nix cross-build via pkgsCross.wasi32 requires compiling LLVM+rustc from
-  # source, which is impractical here, so the artifact is vendored like the
-  # upstream plugins above.)
-  zwm-attn = ../zellij-plugins/zwm-attn/dist/zwm-attn.wasm;
-  zwm-bar = ../zellij-plugins/zwm-bar/dist/zwm-bar.wasm;
+  # Vendored prebuilt WASM for our own plugins. Sources live in
+  # zellij-plugins/{zwm-attn,zwm-bar}/; rebuild with `just build-zwm-attn` /
+  # `just build-zwm-bar` after changes. (A Nix cross-build via pkgsCross.wasi32
+  # requires compiling LLVM+rustc from source, which is impractical here, so the
+  # artifacts are vendored like the upstream plugin above.)
+  #
+  # They are installed at a fixed path and referenced by *that* path rather than
+  # by their Nix store path, because Zellij keys two things by plugin location:
+  #
+  #   - Permission grants, in a cache keyed by path. A store path therefore asks
+  #     for permission again after every rebuild — this cache has four stale
+  #     zwm-attn entries from exactly that.
+  #   - Reloads. `zellij action start-or-reload-plugin file:<path>` reloads every
+  #     running instance of a location in place, re-reading the file from disk
+  #     (reloads set skip_cache, and 0.44 keeps no persistent module cache), so a
+  #     rebuilt plugin can be swapped into live sessions — see
+  #     `just reload-zellij-plugins`. Pointed at a store path instead, running
+  #     tabs would reference the old file for as long as they live, and only a
+  #     newly created session would ever pick a change up.
+  pluginDir = ".local/share/zellij/plugins";
+  zwmAttnPath = "${home}/${pluginDir}/zwm-attn.wasm";
+  zwmBarPath = "${home}/${pluginDir}/zwm-bar.wasm";
   # The status bar is our own plugin (zellij-plugins/zwm-bar/) rather than
   # zjstatus, which subscribes to SessionUpdate — an event Zellij 0.44 emits every
   # second carrying every live session's full tab and pane manifest. One bar
@@ -27,7 +42,7 @@ let
   tabTemplate = ''
     default_tab_template {
       pane size=1 borderless=true {
-        plugin location="file:${zwm-bar}"
+        plugin location="file:${zwmBarPath}"
       }
 
       children
@@ -59,6 +74,9 @@ in
   # are the same build. Setting it here would reintroduce the skew it prevents.
   programs.zellij.enable = true;
 
+  home.file."${pluginDir}/zwm-attn.wasm".source = ../zellij-plugins/zwm-attn/dist/zwm-attn.wasm;
+  home.file."${pluginDir}/zwm-bar.wasm".source = ../zellij-plugins/zwm-bar/dist/zwm-bar.wasm;
+
   xdg.configFile."zellij/config.kdl".text = ''
     pane_frames true
 
@@ -68,7 +86,7 @@ in
         root_dirs "${home}/code"
         session_layout "${home}/.config/zellij/layouts/sessionizer.kdl"
       }
-      zwm-attn location="file:${zwm-attn}"
+      zwm-attn location="file:${zwmAttnPath}"
     }
 
     // Load one headless zwm-attn instance per session so it can mark any tab

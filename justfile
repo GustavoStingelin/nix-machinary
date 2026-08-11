@@ -88,6 +88,31 @@ build-zwm-bar:
 test-zwm-bar:
     cd zellij-plugins/zwm-bar && cargo test --lib --target "$(rustc -vV | awk '/^host:/{print $2}')"
 
+# Swap rebuilt plugins into every running session, without restarting any of
+# them. Zellij reloads every instance of a plugin *location* in place, re-reading
+# the file from disk, which works only because the layouts point at a stable path
+# instead of a Nix store path (see home-manager/zellij.nix). Run after a switch.
+#
+# This changes the code behind a path; it cannot change which path a session's
+# tabs point at. A session created before the stable-path switch — or one whose
+# bar is a different plugin altogether — keeps what it was built with until its
+# tabs are recreated.
+reload-zellij-plugins:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    live=$(zellij list-sessions --no-formatting | grep -v EXITED | awk '{print $1}')
+    if [ -z "$live" ]; then echo "no running sessions"; exit 0; fi
+    for session in $live; do
+      for plugin in zwm-bar zwm-attn; do
+        path="$HOME/.local/share/zellij/plugins/$plugin.wasm"
+        if zellij --session "$session" action start-or-reload-plugin "file:$path"; then
+          echo "$session: reloaded $plugin"
+        else
+          echo "$session: FAILED to reload $plugin" >&2
+        fi
+      done
+    done
+
 # Check flake
 check: zwm-check test-zwm-bar
     nix flake check
