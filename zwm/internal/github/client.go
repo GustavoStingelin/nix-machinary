@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -45,6 +46,83 @@ func (client Client) ListOpenPullRequests(ctx context.Context, directory Directo
 		summaries = append(summaries, PullRequestSummary{Number: PullRequestNumber(fields[0]), Title: fields[1], Author: fields[2]})
 	}
 	return summaries, nil
+}
+
+// reviewRequestLimit caps the review queue. The search is one call regardless of
+// size, but an unbounded list would make the dashboard section unreadable.
+const reviewRequestLimit = "50"
+
+// ListReviewRequests returns open pull requests that request the authenticated
+// user's review, across every repository. It is a single search call and carries
+// no branch detail: `gh search prs` cannot return baseRefName/headRefName, so
+// callers needing refs follow up with ViewPullRequestRefs per pull request.
+func (client Client) ListReviewRequests(ctx context.Context, directory Directory) ([]ReviewRequest, error) {
+	output, err := client.run(ctx, directory,
+		"search", "prs", "--review-requested", "@me", "--state", "open",
+		"--limit", reviewRequestLimit,
+		"--json", "number,title,author,repository",
+		"--jq", ".[] | [.number, .repository.nameWithOwner, .author.login, .title] | @tsv")
+	if err != nil {
+		return nil, err
+	}
+	var requests []ReviewRequest
+	for line := range strings.SplitSeq(string(output.Stdout), "\n") {
+		if line == "" {
+			continue
+		}
+		// Title is last and unsplit: it is the only field that can contain a tab.
+		fields := strings.SplitN(line, "\t", 4)
+		if len(fields) != 4 || !validNumber(fields[0]) || fields[1] == "" {
+			continue
+		}
+		requests = append(requests, ReviewRequest{
+			Number:     PullRequestNumber(fields[0]),
+			Repository: fields[1],
+			Author:     fields[2],
+			Title:      fields[3],
+		})
+	}
+	return requests, nil
+}
+
+// ViewPullRequestRefs reads one pull request's base/head branches and head
+// commit. repository is "owner/name", which lets this work from any directory —
+// the review queue spans repositories, so it cannot rely on the cwd's remote.
+func (client Client) ViewPullRequestRefs(ctx context.Context, directory Directory, repository string, number PullRequestNumber) (PullRequestRefs, error) {
+	output, err := client.run(ctx, directory, "pr", "view", string(number),
+		"--repo", repository,
+		"--json", "number,baseRefName,headRefName,headRefOid",
+		"--jq", "[.number, .baseRefName, .headRefName, .headRefOid] | @tsv")
+	if err != nil {
+		return PullRequestRefs{}, err
+	}
+	return parsePullRequestRefs(output.Stdout)
+}
+
+// BrowsePullRequest opens a pull request in the user's browser. It goes through
+// `gh` rather than an OS opener so there is no per-platform launcher here, and it
+// takes the repository explicitly so it works for a pull request whose repository
+// has no local checkout at all.
+func (client Client) BrowsePullRequest(ctx context.Context, directory Directory, repository string, number PullRequestNumber) error {
+	_, err := client.run(ctx, directory, "pr", "view", string(number), "--repo", repository, "--web")
+	return err
+}
+
+func parsePullRequestRefs(output []byte) (PullRequestRefs, error) {
+	metadata := strings.TrimSuffix(string(output), "\n")
+	fields := strings.Split(metadata, "\t")
+	if len(fields) != 4 || !validNumber(fields[0]) {
+		return PullRequestRefs{}, &MetadataError{Output: append([]byte(nil), output...)}
+	}
+	if slices.Contains(fields[1:], "") {
+		return PullRequestRefs{}, &MetadataError{Output: append([]byte(nil), output...)}
+	}
+	return PullRequestRefs{
+		Number:      PullRequestNumber(fields[0]),
+		BaseRefName: fields[1],
+		HeadRefName: fields[2],
+		HeadOid:     fields[3],
+	}, nil
 }
 
 func parsePullRequest(output []byte) (PullRequest, error) {

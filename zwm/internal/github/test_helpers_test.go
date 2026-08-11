@@ -45,6 +45,11 @@ case "$1:$2" in
     printf '%s' "${GH_LIST_STDERR:-}" >&2
     exit "${GH_LIST_EXIT:-0}"
     ;;
+  search:prs)
+    printf '%s' "${GH_SEARCH_STDOUT:-}"
+    printf '%s' "${GH_SEARCH_STDERR:-}" >&2
+    exit "${GH_SEARCH_EXIT:-0}"
+    ;;
   *)
     printf 'unexpected fake gh command: %s\n' "$*" >&2
     exit 64

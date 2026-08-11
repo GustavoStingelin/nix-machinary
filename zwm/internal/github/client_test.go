@@ -200,3 +200,153 @@ func TestClient_ListOpenPullRequests_skips_lines_without_number_title_and_author
 		{Number: github.PullRequestNumber("56"), Title: "Also good", Author: "carol"},
 	}, summaries)
 }
+
+func TestClient_ListReviewRequests_uses_exact_search_argv_and_parses_rows(t *testing.T) {
+	// Given
+	helper, recordPath := fakeGH(t)
+	t.Setenv("GH_SEARCH_STDOUT", "1305\tbtcsuite/btcwallet\tyyforyongyu\twallet: define watch-only and script policy\n"+
+		"3630\tlightninglabs/lightning-infra\tRoasbeef\tlumosd: raise CPU limits\n")
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	requests, err := client.ListReviewRequests(context.Background(), github.Directory(directory))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.ReviewRequest{
+		{Number: "1305", Repository: "btcsuite/btcwallet", Author: "yyforyongyu", Title: "wallet: define watch-only and script policy"},
+		{Number: "3630", Repository: "lightninglabs/lightning-infra", Author: "Roasbeef", Title: "lumosd: raise CPU limits"},
+	}, requests)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{
+			"search", "prs", "--review-requested", "@me", "--state", "open",
+			"--limit", "50",
+			"--json", "number,title,author,repository",
+			"--jq", ".[] | [.number, .repository.nameWithOwner, .author.login, .title] | @tsv",
+		},
+	}, readInvocations(t, recordPath)[0])
+}
+
+func TestClient_ListReviewRequests_keeps_titles_containing_tabs_intact(t *testing.T) {
+	// Given a title with a tab: it is the last field, so it must not be split.
+	helper, _ := fakeGH(t)
+	t.Setenv("GH_SEARCH_STDOUT", "12\towner/repo\tauthor\ttitle\twith tab\n")
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	requests, err := client.ListReviewRequests(context.Background(), github.Directory(t.TempDir()))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.ReviewRequest{
+		{Number: "12", Repository: "owner/repo", Author: "author", Title: "title\twith tab"},
+	}, requests)
+}
+
+func TestClient_ListReviewRequests_skips_rows_with_an_invalid_number_or_repository(t *testing.T) {
+	// Given
+	helper, _ := fakeGH(t)
+	t.Setenv("GH_SEARCH_STDOUT", "abc\towner/repo\ta\tbad number\n"+
+		"0123\towner/repo\ta\tleading zero\n"+
+		"9\t\ta\tno repository\n"+
+		"7\towner/repo\ta\tkeeps this one\n")
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	requests, err := client.ListReviewRequests(context.Background(), github.Directory(t.TempDir()))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.ReviewRequest{
+		{Number: "7", Repository: "owner/repo", Author: "a", Title: "keeps this one"},
+	}, requests)
+}
+
+func TestClient_ViewPullRequestRefs_targets_the_named_repository_and_returns_the_real_base(t *testing.T) {
+	// Given a stacked pull request: its base is the branch below it, not master.
+	helper, recordPath := fakeGH(t)
+	t.Setenv("GH_VIEW_STDOUT", "1305\titests/watch-only-create\ttask-watch-policy\ta08a506b935de6056782ef5d4d98f488dbb3f1c5\n")
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	refs, err := client.ViewPullRequestRefs(context.Background(), github.Directory(directory), "btcsuite/btcwallet", "1305")
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, github.PullRequestRefs{
+		Number:      "1305",
+		BaseRefName: "itests/watch-only-create",
+		HeadRefName: "task-watch-policy",
+		HeadOid:     "a08a506b935de6056782ef5d4d98f488dbb3f1c5",
+	}, refs)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{
+			"pr", "view", "1305",
+			"--repo", "btcsuite/btcwallet",
+			"--json", "number,baseRefName,headRefName,headRefOid",
+			"--jq", "[.number, .baseRefName, .headRefName, .headRefOid] | @tsv",
+		},
+	}, readInvocations(t, recordPath)[0])
+}
+
+func TestClient_ViewPullRequestRefs_rejects_incomplete_metadata(t *testing.T) {
+	for name, stdout := range map[string]string{
+		"missing field": "1305\tbase\thead\n",
+		"empty base":    "1305\t\thead\toid\n",
+		"empty oid":     "1305\tbase\thead\t\n",
+		"bad number":    "x\tbase\thead\toid\n",
+		"no output":     "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			helper, _ := fakeGH(t)
+			t.Setenv("GH_VIEW_STDOUT", stdout)
+			client := github.NewClient(github.Config{Executable: helper})
+
+			_, err := client.ViewPullRequestRefs(context.Background(), github.Directory(t.TempDir()), "owner/repo", "1305")
+
+			// A half-read pull request must not produce a review prompt with a
+			// wrong or empty base branch.
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestReviewRequest_RepositoryName_extracts_the_project_directory_name(t *testing.T) {
+	require.Equal(t, "btcwallet", github.ReviewRequest{Repository: "btcsuite/btcwallet"}.RepositoryName())
+	require.Equal(t, "bare", github.ReviewRequest{Repository: "bare"}.RepositoryName())
+}
+
+func TestClient_BrowsePullRequest_uses_exact_web_argv_for_the_named_repository(t *testing.T) {
+	// Given
+	helper, recordPath := fakeGH(t)
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	err := client.BrowsePullRequest(context.Background(), github.Directory(directory), "someone/not-cloned", "77")
+
+	// Then --repo carries the repository, so this works with no local checkout.
+	require.NoError(t, err)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{"pr", "view", "77", "--repo", "someone/not-cloned", "--web"},
+	}, readInvocations(t, recordPath)[0])
+}
+
+func TestClient_BrowsePullRequest_reports_a_failing_browser_launch(t *testing.T) {
+	// Given
+	helper, _ := fakeGH(t)
+	t.Setenv("GH_VIEW_EXIT", "1")
+	t.Setenv("GH_VIEW_STDERR", "failed to open browser\n")
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	err := client.BrowsePullRequest(context.Background(), github.Directory(t.TempDir()), "owner/repo", "1")
+
+	// Then
+	require.Error(t, err)
+}
