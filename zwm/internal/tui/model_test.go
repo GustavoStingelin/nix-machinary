@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -10,9 +11,15 @@ import (
 )
 
 type fakeSource struct {
-	sessions []SessionView
-	tabs     map[string][]TabView
-	agents   map[string][]AgentView
+	sessions  []SessionView
+	tabs      map[string][]TabView
+	agents    map[string][]AgentView
+	reviews   []ReviewView
+	reviewErr error
+}
+
+func (source fakeSource) Reviews(context.Context) ([]ReviewView, error) {
+	return source.reviews, source.reviewErr
 }
 
 func (source fakeSource) Sessions(context.Context) ([]SessionView, error) {
@@ -41,6 +48,7 @@ func (jumper *fakeJumper) JumpTo(_ context.Context, target JumpTarget) error {
 
 type commandCall struct {
 	op, project, arg string
+	repository       string
 	force            bool
 }
 
@@ -73,6 +81,16 @@ func (commander *fakeCommander) CheckoutNew(_ context.Context, project, branch s
 }
 func (commander *fakeCommander) PullRequest(_ context.Context, project, selector string, force bool) error {
 	commander.calls = append(commander.calls, commandCall{op: "wpr", project: project, arg: selector, force: force})
+	return commander.err
+}
+func (commander *fakeCommander) ReviewPullRequest(_ context.Context, project, repository, selector string, force bool) error {
+	commander.calls = append(commander.calls, commandCall{
+		op: "review", project: project, repository: repository, arg: selector, force: force,
+	})
+	return commander.err
+}
+func (commander *fakeCommander) BrowsePullRequest(_ context.Context, repository, selector string) error {
+	commander.calls = append(commander.calls, commandCall{op: "browse", repository: repository, arg: selector})
 	return commander.err
 }
 
@@ -442,4 +460,271 @@ func TestModel_exited_session_cannot_be_expanded(t *testing.T) {
 	send(t, m, key("right"))
 	require.False(t, m.sessions[row.session].expanded)
 	require.Contains(t, strings.ToLower(m.status), "exited")
+}
+
+// --- review queue ---
+
+func reviewFixtures() []ReviewView {
+	return []ReviewView{
+		// Stacked onto another branch, checked out locally and behind the remote.
+		{Number: "1305", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "wallet: define watch-only and script policy", Author: "yyforyongyu",
+			Base: "itests/watch-only-create", Head: "task-watch-policy",
+			Worktree: "/wt/btcwallet/pr-1305", Stale: true},
+		// Cloned locally but not checked out as a worktree yet.
+		{Number: "3630", Repository: "lightninglabs/lightning-infra", Project: "lightning-infra",
+			Title: "lumosd: raise CPU limits", Author: "Roasbeef", Base: "main", Head: "cpu-limits"},
+		// Review requested on a repository with no local clone at all. Refs are
+		// still fetched for these, so the branches show even though nothing local
+		// can be opened.
+		{Number: "77", Repository: "someone/not-cloned", Title: "a change", Author: "nobody",
+			Base: "trunk", Head: "some-fix"},
+	}
+}
+
+func withReviews(t *testing.T) (*model, *fakeCommander) {
+	t.Helper()
+	m, _ := loaded(t)
+	send(t, m, reviewsLoadedMsg{reviews: reviewFixtures()})
+	return m, m.commander.(*fakeCommander)
+}
+
+func focusReview(t *testing.T, m *model, number string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selReview && m.reviews[row.review].Number == number {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("review %s is not a navigable row", number)
+}
+
+func TestReviewQueue_renders_base_branch_and_local_state(t *testing.T) {
+	m, _ := withReviews(t)
+
+	view := m.View()
+	require.Contains(t, view, "review queue")
+	// The base branch is shown because it decides what the review actually diffs.
+	require.Contains(t, view, "itests/watch-only-create")
+	require.Contains(t, view, "stale")
+	require.Contains(t, view, "(not cloned)")
+}
+
+func TestReviewQueue_enter_checks_out_without_force(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "1305")
+
+	send(t, m, m.activate()())
+
+	// Enter must never discard local commits, even on a stale worktree.
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1305"}}, commander.calls)
+}
+
+func TestReviewQueue_force_key_resets_the_worktree(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "1305")
+
+	send(t, m, m.activateReview(true, false)())
+
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1305", force: true}}, commander.calls)
+}
+
+func TestReviewQueue_agent_key_passes_the_repository_and_forces_when_stale(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "1305")
+
+	send(t, m, m.activateReview(false, true)())
+
+	// The repository travels with the request (the queue spans repositories), and a
+	// stale worktree is reset first so the agent never reviews outdated code.
+	require.Equal(t, []commandCall{{
+		op: "review", project: "btcwallet", repository: "btcsuite/btcwallet", arg: "1305", force: true,
+	}}, commander.calls)
+}
+
+func TestReviewQueue_agent_key_does_not_force_a_fresh_checkout(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "3630")
+
+	send(t, m, m.activateReview(false, true)())
+
+	require.Equal(t, []commandCall{{
+		op: "review", project: "lightning-infra", repository: "lightninglabs/lightning-infra", arg: "3630",
+	}}, commander.calls)
+}
+
+func TestReviewQueue_refuses_a_repository_with_no_local_checkout(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "77")
+
+	cmd := m.activate()
+
+	require.Nil(t, cmd)
+	require.Empty(t, commander.calls)
+	require.Contains(t, strings.ToLower(m.status), "no checkout")
+}
+
+func TestReviewQueue_tab_cycles_between_sections(t *testing.T) {
+	m, _ := withReviews(t)
+	m.cursor = 0
+	require.Equal(t, selAgent, m.rows[m.cursor].kind)
+
+	m.cycleSection(1)
+	require.Equal(t, selReview, m.rows[m.cursor].kind)
+	m.cycleSection(1)
+	require.Equal(t, selSession, m.rows[m.cursor].kind)
+	m.cycleSection(1)
+	require.Equal(t, selAgent, m.rows[m.cursor].kind, "wraps back to the first section")
+	m.cycleSection(-1)
+	require.Equal(t, selSession, m.rows[m.cursor].kind, "shift+tab goes backwards")
+}
+
+func TestReviewQueue_empty_queue_is_distinguished_from_not_yet_loaded(t *testing.T) {
+	m, _ := loaded(t)
+	require.Contains(t, m.View(), "loading…")
+
+	send(t, m, reviewsLoadedMsg{reviews: nil})
+
+	require.Contains(t, m.View(), "nothing waiting on you")
+}
+
+func TestReviewQueue_shows_head_and_base_branches(t *testing.T) {
+	m, _ := withReviews(t)
+
+	view := m.View()
+	// Both ends of the range, so it is obvious what the review spans — for a
+	// stacked pull request the base is the branch below it, not master.
+	require.Contains(t, view, "task-watch-policy → itests/watch-only-create")
+	require.Contains(t, view, "cpu-limits → main")
+}
+
+func TestReviewBranches_degrades_when_refs_are_unavailable(t *testing.T) {
+	require.Equal(t, "  head → base", reviewBranches(ReviewView{Head: "head", Base: "base"}))
+	require.Equal(t, "  → base", reviewBranches(ReviewView{Base: "base"}))
+	require.Equal(t, "  head → ?", reviewBranches(ReviewView{Head: "head"}))
+	require.Equal(t, "", reviewBranches(ReviewView{}))
+}
+
+func TestReviewQueue_browse_key_opens_the_pull_request_and_stays_open(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "1305")
+
+	send(t, m, m.browseReview()())
+
+	require.Equal(t, []commandCall{{op: "browse", repository: "btcsuite/btcwallet", arg: "1305"}}, commander.calls)
+	// Opening a browser must not tear down the dashboard: the queue is still
+	// there to work through.
+	require.Equal(t, modeTree, m.mode)
+	require.Contains(t, m.status, "#1305")
+}
+
+func TestReviewQueue_browse_works_without_a_local_checkout(t *testing.T) {
+	m, commander := withReviews(t)
+	focusReview(t, m, "77")
+
+	send(t, m, m.browseReview()())
+
+	// Unlike checkout, browsing needs nothing local — these are often exactly the
+	// rows you want to look at in a browser.
+	require.Equal(t, []commandCall{{op: "browse", repository: "someone/not-cloned", arg: "77"}}, commander.calls)
+	require.NotContains(t, m.status, "no checkout")
+}
+
+func TestReviewQueue_browse_reports_failure_without_quitting(t *testing.T) {
+	m, commander := withReviews(t)
+	commander.err = errBrowse
+	focusReview(t, m, "1305")
+
+	send(t, m, m.browseReview()())
+
+	require.Equal(t, modeTree, m.mode)
+	require.Contains(t, m.status, "no browser")
+}
+
+func TestReviewQueue_browse_is_inert_outside_the_review_section(t *testing.T) {
+	m, commander := withReviews(t)
+	focusSession(t, m, "bitcoin")
+
+	require.Nil(t, m.browseReview())
+	require.Empty(t, commander.calls)
+}
+
+var errBrowse = errors.New("no browser available")
+
+func TestReviewQueue_shows_branches_even_when_the_repository_is_not_cloned(t *testing.T) {
+	m, _ := withReviews(t)
+
+	view := m.View()
+	require.Contains(t, view, "some-fix → trunk")
+	require.Contains(t, view, "(not cloned)")
+}
+
+func TestSortReviews_groups_by_repository_then_longest_waiting_first(t *testing.T) {
+	reviews := []ReviewView{
+		{Number: "1313", Repository: "btcsuite/btcwallet"},
+		{Number: "3545", Repository: "lightninglabs/lightning-infra"},
+		{Number: "286", Repository: "btcsuite/btcd"},
+		{Number: "1083", Repository: "btcsuite/btcwallet"},
+		{Number: "3709", Repository: "lightninglabs/lightning-infra"},
+		{Number: "285", Repository: "btcsuite/btcd"},
+	}
+
+	sortReviews(reviews)
+
+	// Repositories grouped alphabetically; within each, the oldest pull request
+	// (lowest number, since numbers are monotonic per repository) comes first.
+	got := make([]string, 0, len(reviews))
+	for _, review := range reviews {
+		got = append(got, review.Repository+"#"+review.Number)
+	}
+	require.Equal(t, []string{
+		"btcsuite/btcd#285", "btcsuite/btcd#286",
+		"btcsuite/btcwallet#1083", "btcsuite/btcwallet#1313",
+		"lightninglabs/lightning-infra#3545", "lightninglabs/lightning-infra#3709",
+	}, got)
+}
+
+func TestSortReviews_compares_numbers_numerically_not_lexicographically(t *testing.T) {
+	reviews := []ReviewView{
+		{Number: "1083", Repository: "same/repo"},
+		{Number: "286", Repository: "same/repo"},
+	}
+
+	sortReviews(reviews)
+
+	// Lexicographically "1083" < "286"; the queue must use the numeric order.
+	require.Equal(t, "286", reviews[0].Number)
+	require.Equal(t, "1083", reviews[1].Number)
+}
+
+func TestSortReviews_folds_owner_casing_when_grouping(t *testing.T) {
+	reviews := []ReviewView{
+		{Number: "2", Repository: "Owner/repo"},
+		{Number: "9", Repository: "other/repo"},
+		{Number: "1", Repository: "owner/repo"},
+	}
+
+	sortReviews(reviews)
+
+	// "Owner/repo" and "owner/repo" are the same repository and must stay adjacent
+	// and in number order, rather than being split by uppercase sorting ahead of
+	// every lowercase name. ("other" precedes "owner", so #9 leads.)
+	got := make([]string, 0, len(reviews))
+	for _, review := range reviews {
+		got = append(got, review.Repository+"#"+review.Number)
+	}
+	require.Equal(t, []string{"other/repo#9", "owner/repo#1", "Owner/repo#2"}, got)
+}
+
+func TestReviewQueue_applies_the_ordering_on_load(t *testing.T) {
+	m, _ := loaded(t)
+	send(t, m, reviewsLoadedMsg{reviews: []ReviewView{
+		{Number: "3630", Repository: "lightninglabs/lightning-infra", Project: "lightning-infra"},
+		{Number: "1305", Repository: "btcsuite/btcwallet", Project: "btcwallet"},
+		{Number: "1083", Repository: "btcsuite/btcwallet", Project: "btcwallet"},
+	}})
+
+	require.Equal(t, []string{"1083", "1305", "3630"},
+		[]string{m.reviews[0].Number, m.reviews[1].Number, m.reviews[2].Number})
 }

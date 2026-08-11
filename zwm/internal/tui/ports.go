@@ -40,12 +40,41 @@ type AgentView struct {
 	State    string
 }
 
-// Source supplies the dashboard's data. Each call may shell out to Zellij or
-// read the agent-state store, so the model invokes them from tea.Cmd goroutines.
+// ReviewView is one open pull request awaiting the user's review.
+//
+// Project is the local project under the code root that the pull request's
+// repository maps to, empty when there is no local checkout — those rows still
+// show (a review request you can't act on locally is still a review request) but
+// cannot be opened. Worktree is the managed worktree path once the pull request
+// has been checked out, and Stale means that worktree's HEAD no longer matches
+// the pull request's head commit, so opening it would show outdated code.
+// Base is the branch the pull request merges into, which for a stacked pull
+// request is the branch below it rather than the repository's default branch.
+// It is shown because it decides what a review is actually diffing.
+type ReviewView struct {
+	Number     string
+	Repository string
+	Project    string
+	Title      string
+	Author     string
+	Base       string
+	Head       string
+	Worktree   string
+	Stale      bool
+}
+
+// Source supplies the dashboard's data. Each call may shell out to Zellij, gh,
+// or git, or read the agent-state store, so the model invokes them from tea.Cmd
+// goroutines.
 type Source interface {
 	Sessions(ctx context.Context) ([]SessionView, error)
 	Tabs(ctx context.Context, session string) ([]TabView, error)
 	Agents(ctx context.Context, session string) ([]AgentView, error)
+	// Reviews lists pull requests awaiting the user's review, in any order — the
+	// model sorts them. It is the slowest source (a GitHub search plus a
+	// per-pull-request ref lookup), so the model loads it on its own schedule
+	// rather than every tick.
+	Reviews(ctx context.Context) ([]ReviewView, error)
 }
 
 // JumpTarget is where Enter should land: a tab, plus the pane inside it when
@@ -78,4 +107,12 @@ type Commander interface {
 	// PullRequest checks out a PR worktree; force resets an existing managed
 	// worktree to the PR's latest remote state (wpr --force).
 	PullRequest(ctx context.Context, project, selector string, force bool) error
+	// ReviewPullRequest checks out the PR worktree exactly as PullRequest does and
+	// then starts a review agent in that tab, seeded with a prompt naming the pull
+	// request and its real base branch. repository is "owner/name", needed because
+	// the review queue spans repositories.
+	ReviewPullRequest(ctx context.Context, project, repository, selector string, force bool) error
+	// BrowsePullRequest opens a pull request on GitHub in the user's browser. It
+	// needs no local checkout, so it works for every row in the review queue.
+	BrowsePullRequest(ctx context.Context, repository, selector string) error
 }

@@ -23,9 +23,9 @@ func NewSystemTUI() cli.TUIRunner {
 	store := agentstate.NewStore(agentstate.Dir(os.LookupEnv))
 	current, _ := zellij.CurrentSession(config)
 	return tui.NewRunner(
-		tuiSource{config: config, store: store},
+		tuiSource{config: config, store: store, reviews: newReviewSource()},
 		tuiJumper{config: config, current: current},
-		tuiCommander{completer: NewSystemCompleter(), service: NewSystemService()},
+		tuiCommander{completer: NewSystemCompleter(), service: NewSystemService(), review: newReviewLauncher()},
 		current,
 	)
 }
@@ -36,6 +36,7 @@ func NewSystemTUI() cli.TUIRunner {
 type tuiCommander struct {
 	completer cli.Completer
 	service   cli.Service
+	review    reviewLauncher
 }
 
 func (commander tuiCommander) Projects(ctx context.Context) []string {
@@ -66,6 +67,14 @@ func (commander tuiCommander) PullRequest(ctx context.Context, project, selector
 	return commander.run(ctx, project, cli.PullRequest{Selector: cli.PullRequestSelector(selector), Force: force})
 }
 
+func (commander tuiCommander) ReviewPullRequest(ctx context.Context, project, repository, selector string, force bool) error {
+	return commander.review.Launch(ctx, project, repository, selector, force)
+}
+
+func (commander tuiCommander) BrowsePullRequest(ctx context.Context, repository, selector string) error {
+	return commander.review.Browse(ctx, repository, selector)
+}
+
 func (commander tuiCommander) run(ctx context.Context, project string, action cli.Action) error {
 	_, err := commander.service.Execute(ctx, cli.Invocation{
 		Project: cli.ProjectNameOrPath(project),
@@ -77,8 +86,14 @@ func (commander tuiCommander) run(ctx context.Context, project string, action cl
 // tuiSource adapts the Zellij inventory commands and the agent-state store to
 // the tui.Source port, converting adapter types into the TUI's view structs.
 type tuiSource struct {
-	config zellij.Config
-	store  *agentstate.Store
+	config  zellij.Config
+	store   *agentstate.Store
+	reviews reviewSource
+}
+
+// Reviews delegates to the review source, which owns the GitHub and git calls.
+func (source tuiSource) Reviews(ctx context.Context) ([]tui.ReviewView, error) {
+	return source.reviews.Reviews(ctx)
 }
 
 func (source tuiSource) Sessions(ctx context.Context) ([]tui.SessionView, error) {

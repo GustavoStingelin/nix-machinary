@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -46,8 +47,26 @@ func (m *model) displayLines() []displayLine {
 			lines = append(lines, displayLine{text: renderAgentEntry(entry, m.current, selected), row: row})
 			row++
 		}
-		lines = append(lines, displayLine{text: dimStyle.Render("─── sessions ───"), row: -1})
+		lines = append(lines, displayLine{text: dimStyle.Render("───"), row: -1})
 	}
+
+	// Review queue: pull requests waiting on you, one Tab away from the agents
+	// panel. Rendered before the tree because it is a to-do list, not state.
+	lines = append(lines, displayLine{text: titleStyle.Render("review queue"), row: -1})
+	switch {
+	case !m.reviewsLoaded:
+		lines = append(lines, displayLine{text: dimStyle.Render("  loading…"), row: -1})
+	case len(m.reviews) == 0:
+		lines = append(lines, displayLine{text: dimStyle.Render("  (nothing waiting on you)"), row: -1})
+	default:
+		width := reviewNumberWidth(m.reviews)
+		for _, review := range m.reviews {
+			selected := m.cursor == row
+			lines = append(lines, displayLine{text: renderReview(review, width, selected), row: row})
+			row++
+		}
+	}
+	lines = append(lines, displayLine{text: dimStyle.Render("─── sessions ───"), row: -1})
 
 	for _, session := range m.sessions {
 		selected := m.cursor == row
@@ -179,6 +198,60 @@ func renderTab(tab TabView, selected bool) string {
 	return gutter(selected) + "  " + marker + tab.Title
 }
 
+// reviewNumberWidth pads pull request numbers into a column so repositories and
+// titles line up across rows.
+func reviewNumberWidth(reviews []ReviewView) int {
+	width := 0
+	for _, review := range reviews {
+		if len(review.Number) > width {
+			width = len(review.Number)
+		}
+	}
+	return width
+}
+
+// reviewBranches renders "head → base", the two branches the review spans. Base
+// is the branch the pull request actually merges into, so for a stacked pull
+// request this reads e.g. "task-watch-policy → itests/watch-only-create" rather
+// than implying master. Empty when the refs could not be read.
+func reviewBranches(review ReviewView) string {
+	switch {
+	case review.Head != "" && review.Base != "":
+		return "  " + review.Head + " → " + review.Base
+	case review.Base != "":
+		return "  → " + review.Base
+	case review.Head != "":
+		return "  " + review.Head + " → ?"
+	default:
+		return ""
+	}
+}
+
+// renderReview renders one review-queue row: the pull request, the branches it
+// spans, and its local state. A pull request whose repository has no checkout under
+// the code root is dimmed, because Enter cannot open it.
+func renderReview(review ReviewView, numberWidth int, selected bool) string {
+	line := gutter(selected) + fmt.Sprintf("#%-*s ", numberWidth, review.Number)
+
+	repo := review.Repository
+	if review.Project == "" {
+		// No local checkout: say so where the status badges go, and dim the row.
+		// `b` still works on this row, so the branches are still worth showing.
+		return line + dimStyle.Render(repo+reviewBranches(review)+"  "+review.Title+"  (not cloned)")
+	}
+	line += repo + dimStyle.Render(reviewBranches(review))
+	switch {
+	case review.Stale:
+		line += "  " + waitingStyle.Render("stale")
+	case review.Worktree != "":
+		line += "  " + doneStyle.Render("local")
+	}
+	if review.Author != "" {
+		line += "  " + dimStyle.Render("@"+review.Author)
+	}
+	return line + "  " + review.Title
+}
+
 // rollupBadge summarizes a session's agents with the state that most wants the
 // user's attention.
 func rollupBadge(agents []AgentView) string {
@@ -199,7 +272,12 @@ func (m *model) footer() string {
 	if m.status != "" {
 		return errorStyle.Render(m.status)
 	}
-	return footerStyle.Render("↑/↓ move · enter jump · o open · w wco · p wpr · r refresh · q quit")
+	// The review queue rebinds enter and adds two keys, so the hint follows the
+	// cursor rather than listing every binding at once.
+	if row, ok := m.currentRow(); ok && row.kind == selReview {
+		return footerStyle.Render("↑/↓ move · tab section · enter checkout · ctrl+f force · a review agent · b browser · r refresh · q quit")
+	}
+	return footerStyle.Render("↑/↓ move · tab section · enter jump · o open · w wco · p wpr · r refresh · q quit")
 }
 
 func gutter(selected bool) string {
