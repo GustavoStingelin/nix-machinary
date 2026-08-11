@@ -5,16 +5,9 @@ import (
 	"testing"
 
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/agentstate"
-	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
+	"github.com/GustavoStingelin/nix-machinary/zwm/internal/tui"
 	"github.com/stretchr/testify/require"
 )
-
-type tabNamesRunner struct{ stdout string }
-
-func (tabNamesRunner) Available(context.Context, zellij.CommandName) error { return nil }
-func (runner tabNamesRunner) Run(context.Context, zellij.Command) (zellij.Output, error) {
-	return zellij.Output{Stdout: runner.stdout}, nil
-}
 
 func TestTuiSourceAgents_forgets_agents_whose_tab_closed(t *testing.T) {
 	store := agentstate.NewStore(t.TempDir())
@@ -22,12 +15,10 @@ func TestTuiSourceAgents_forgets_agents_whose_tab_closed(t *testing.T) {
 	require.NoError(t, store.Write(agentstate.Record{Session: "bitcoin", PaneID: "9", TabTitle: "btcwallet:closed", State: agentstate.Done}))
 	require.NoError(t, store.Write(agentstate.Record{Session: "bitcoin", PaneID: "3", TabTitle: "", State: agentstate.Waiting}))
 
-	source := tuiSource{
-		config: zellij.Config{Runner: tabNamesRunner{stdout: "btcwallet\nbtcwallet:feature\n"}},
-		store:  store,
-	}
+	source := tuiSource{store: store}
+	liveTabs := []tui.TabView{{Title: "btcwallet"}, {Title: "btcwallet:feature"}}
 
-	agents, err := source.Agents(context.Background(), "bitcoin")
+	agents, err := source.Agents(context.Background(), "bitcoin", liveTabs)
 	require.NoError(t, err)
 
 	// Live tab kept, unknown-tab (empty) kept, closed tab dropped.
@@ -43,17 +34,15 @@ func TestTuiSourceAgents_forgets_agents_whose_tab_closed(t *testing.T) {
 	require.Len(t, remaining, 2)
 }
 
-func TestTuiSourceAgents_keeps_records_when_the_tab_query_is_unreliable(t *testing.T) {
+// An empty tab list is what both a failed query and a skipped one look like, and
+// neither is evidence that the tab is gone.
+func TestTuiSourceAgents_keeps_records_without_a_tab_list(t *testing.T) {
 	store := agentstate.NewStore(t.TempDir())
 	require.NoError(t, store.Write(agentstate.Record{Session: "bitcoin", PaneID: "9", TabTitle: "btcwallet:closed", State: agentstate.Done}))
 
-	// Empty tab list => cannot trust it => reconcile must be skipped.
-	source := tuiSource{
-		config: zellij.Config{Runner: tabNamesRunner{stdout: ""}},
-		store:  store,
-	}
+	source := tuiSource{store: store}
 
-	agents, err := source.Agents(context.Background(), "bitcoin")
+	agents, err := source.Agents(context.Background(), "bitcoin", nil)
 	require.NoError(t, err)
 	require.Len(t, agents, 1)
 

@@ -11,11 +11,19 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const refreshInterval = 2 * time.Second
+// refreshInterval paces the session tree and the agents panel. Every tick that
+// needs a session's tabs costs one `zellij action query-tab-names` client, and
+// that call is far from free on the other side: measured at ~250ms of Zellij
+// server CPU on a ten-tab session, spent in the very plugin threads that also
+// deliver the zwm-attn pipes. Polling every session every two seconds was enough
+// to keep those threads permanently behind, and Zellij drops a CLI pipe that
+// misses a 1s deadline — i.e. lost attention glyphs. So the tick is deliberately
+// slow, and refreshDataCmd asks for tabs only where they are needed.
+const refreshInterval = 5 * time.Second
 
 // reviewInterval paces the review queue independently of the session tree. It
 // costs a GitHub search (plus a staleness probe per checked-out pull request), so
-// it refreshes far less often than the 2s local-state tick.
+// it refreshes far less often than the local-state tick.
 const reviewInterval = 2 * time.Minute
 
 // --- messages ---
@@ -36,8 +44,12 @@ type browsedMsg struct {
 
 type sessionDataMsg struct {
 	session string
-	tabs    []TabView
-	agents  []AgentView
+	// tabs is nil both when the session has none and when the refresh skipped the
+	// tab query; tabsLoaded tells the two apart, so a skipped query never blanks
+	// the tabs already on screen.
+	tabs       []TabView
+	tabsLoaded bool
+	agents     []AgentView
 }
 
 type tickMsg struct{}
@@ -53,7 +65,6 @@ type sessionState struct {
 	current  bool
 	exited   bool
 	expanded bool
-	loaded   bool
 	tabs     []TabView
 	agents   []AgentView
 }
@@ -135,17 +146,25 @@ func (m *model) loadSessionsCmd() tea.Cmd {
 	}
 }
 
-func (m *model) loadSessionDataCmd(session string) tea.Cmd {
+// loadSessionDataCmd reloads one session. withTabs asks for the tab query, the
+// expensive half; the agents come from the on-disk record store either way, and
+// the tabs — when fetched — double as the live set that retires records whose tab
+// has closed, so one query serves both.
+func (m *model) loadSessionDataCmd(session string, withTabs bool) tea.Cmd {
 	return func() tea.Msg {
-		tabs, err := m.source.Tabs(m.ctx, session)
+		var tabs []TabView
+		if withTabs {
+			queried, err := m.source.Tabs(m.ctx, session)
+			if err != nil {
+				return errMsg{err}
+			}
+			tabs = queried
+		}
+		agents, err := m.source.Agents(m.ctx, session, tabs)
 		if err != nil {
 			return errMsg{err}
 		}
-		agents, err := m.source.Agents(m.ctx, session)
-		if err != nil {
-			return errMsg{err}
-		}
-		return sessionDataMsg{session: session, tabs: tabs, agents: agents}
+		return sessionDataMsg{session: session, tabs: tabs, tabsLoaded: withTabs, agents: agents}
 	}
 }
 
@@ -441,10 +460,11 @@ func (m *model) expand() tea.Cmd {
 	}
 	session.expanded = true
 	m.rebuildRows()
-	if !session.loaded {
-		return m.loadSessionDataCmd(session.name)
-	}
-	return nil
+	// Always re-query, even with tabs already on hand: a collapsed session is not
+	// refreshed, so what is held may be minutes old, and opening it is exactly the
+	// moment the list has to be true. One query on a keypress is not worth caching
+	// against.
+	return m.loadSessionDataCmd(session.name, true)
 }
 
 func (m *model) collapse() tea.Cmd {
@@ -529,7 +549,6 @@ func (m *model) mergeSessions(fresh []SessionView) {
 		state := sessionState{name: view.Name, current: view.Current, exited: view.Exited}
 		if prior, ok := previous[view.Name]; ok {
 			state.expanded = prior.expanded
-			state.loaded = prior.loaded
 			state.tabs = prior.tabs
 			state.agents = prior.agents
 		}
@@ -571,9 +590,10 @@ func (m *model) expandCurrentInitially() {
 func (m *model) applySessionData(msg sessionDataMsg) {
 	for i := range m.sessions {
 		if m.sessions[i].name == msg.session {
-			m.sessions[i].tabs = msg.tabs
+			if msg.tabsLoaded {
+				m.sessions[i].tabs = msg.tabs
+			}
 			m.sessions[i].agents = msg.agents
-			m.sessions[i].loaded = true
 			m.buildAgents()
 			m.rebuildRows()
 			return
@@ -581,14 +601,20 @@ func (m *model) applySessionData(msg sessionDataMsg) {
 	}
 }
 
-// refreshDataCmd reloads tabs+agents for every non-exited session so the agents
-// panel and the tree show live state (new attention, closed tabs) on each tick.
-// All sessions load, not just expanded ones, because the panel spans them all.
+// refreshDataCmd reloads every non-exited session so the agents panel and the
+// tree show live state (new attention, closed tabs) on each tick. All sessions
+// load, not just expanded ones, because the panel spans them all — but the tab
+// query, the one call that costs the Zellij server real work (see
+// refreshInterval), is asked for only where its answer is used: a session whose
+// tabs are on screen, or one holding agent records that may need retiring. A
+// collapsed session with no records needs neither, and a record appearing in it
+// still arrives from the store on the next tick, which then queries it too.
 func (m *model) refreshDataCmd() tea.Cmd {
 	var cmds []tea.Cmd
 	for _, session := range m.sessions {
 		if !session.exited {
-			cmds = append(cmds, m.loadSessionDataCmd(session.name))
+			withTabs := session.expanded || len(session.agents) > 0
+			cmds = append(cmds, m.loadSessionDataCmd(session.name, withTabs))
 		}
 	}
 	switch len(cmds) {

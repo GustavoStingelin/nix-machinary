@@ -16,6 +16,9 @@ type fakeSource struct {
 	agents    map[string][]AgentView
 	reviews   []ReviewView
 	reviewErr error
+	// tabCalls, when set, records every session whose tabs were queried, in
+	// order. It is a pointer so the value receivers below can still append.
+	tabCalls *[]string
 }
 
 func (source fakeSource) Reviews(context.Context) ([]ReviewView, error) {
@@ -27,11 +30,30 @@ func (source fakeSource) Sessions(context.Context) ([]SessionView, error) {
 }
 
 func (source fakeSource) Tabs(_ context.Context, session string) ([]TabView, error) {
+	if source.tabCalls != nil {
+		*source.tabCalls = append(*source.tabCalls, session)
+	}
 	return source.tabs[session], nil
 }
 
-func (source fakeSource) Agents(_ context.Context, session string) ([]AgentView, error) {
-	return source.agents[session], nil
+// Agents mirrors the real source: it answers from its own records and only uses
+// liveTabs to drop records whose tab is gone, so a call without tabs returns
+// everything it holds.
+func (source fakeSource) Agents(_ context.Context, session string, liveTabs []TabView) ([]AgentView, error) {
+	if len(liveTabs) == 0 {
+		return source.agents[session], nil
+	}
+	live := make(map[string]struct{}, len(liveTabs))
+	for _, tab := range liveTabs {
+		live[tab.Title] = struct{}{}
+	}
+	kept := make([]AgentView, 0, len(source.agents[session]))
+	for _, agent := range source.agents[session] {
+		if _, ok := live[agent.TabTitle]; ok || agent.TabTitle == "" {
+			kept = append(kept, agent)
+		}
+	}
+	return kept, nil
 }
 
 type jumpCall struct{ session, tab, paneID string }
@@ -156,9 +178,27 @@ func newTestModel() (*model, *fakeJumper) {
 	return newModel(context.Background(), source, jumper, commander, "bitcoin"), jumper
 }
 
+// runBatch executes a command and every command it batches, feeding each
+// resulting message back through Update. send stops at the first follow-up,
+// which is enough for a single command but drops a tea.Batch on the floor.
+func runBatch(t *testing.T, m *model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, sub := range batch {
+			runBatch(t, m, sub)
+		}
+		return
+	}
+	m.Update(msg)
+}
+
 func loadData(t *testing.T, m *model, session string) {
 	t.Helper()
-	send(t, m, m.loadSessionDataCmd(session)())
+	send(t, m, m.loadSessionDataCmd(session, true)())
 }
 
 func loaded(t *testing.T) (*model, *fakeJumper) {
@@ -226,6 +266,76 @@ func TestModel_auto_expands_the_current_session_on_load(t *testing.T) {
 	require.Contains(t, view, "working")         // three-way state
 	require.Contains(t, view, "waiting for you") // claude, session-level
 	require.Contains(t, view, "(exited)")        // stale session shown, display-only
+}
+
+// The tab query is the dashboard's only expensive call (it costs the Zellij
+// server real CPU in the threads that also carry the attention pipes), so a
+// refresh must ask for it session by session, and only where the answer is used.
+func TestRefresh_queries_tabs_only_for_expanded_sessions_and_sessions_with_agents(t *testing.T) {
+	var queried []string
+	source := fakeSource{
+		sessions: []SessionView{
+			{Name: "bitcoin", Current: true},
+			{Name: "nix"},
+			{Name: "idle"},
+			{Name: "stale", Exited: true},
+		},
+		tabs: map[string][]TabView{
+			"bitcoin": {{Title: "btcwallet"}},
+			"nix":     {{Title: "nix-machinary"}},
+			"idle":    {{Title: "scratch"}},
+		},
+		agents: map[string][]AgentView{
+			"nix": {{Agent: "opencode", PaneID: "1", TabTitle: "nix-machinary", State: StateWorking}},
+		},
+		tabCalls: &queried,
+	}
+	m := newModel(context.Background(), source, &fakeJumper{}, &fakeCommander{}, "bitcoin")
+
+	// First refresh: only the auto-expanded current session has tabs on screen,
+	// and no agent records are known yet — those arrive from the store with this
+	// very refresh, without a tab query of their own.
+	_, cmd := m.Update(sessionsLoadedMsg{sessions: source.sessions})
+	runBatch(t, m, cmd)
+	require.Equal(t, []string{"bitcoin"}, queried)
+	require.Len(t, m.sessions[1].agents, 1, "nix's agent came from the record store")
+
+	// Second refresh: nix now holds a record, so its tabs are needed to retire it
+	// should the tab be gone. "idle" is collapsed and has none, and "stale" has
+	// exited — neither is ever queried.
+	queried = nil
+	runBatch(t, m, m.refreshDataCmd())
+	require.ElementsMatch(t, []string{"bitcoin", "nix"}, queried)
+}
+
+func TestExpand_requeries_the_tabs_of_a_collapsed_session(t *testing.T) {
+	var queried []string
+	tabs := map[string][]TabView{
+		"bitcoin": {{Title: "btcwallet"}},
+		"nix":     {{Title: "nix-machinary"}},
+	}
+	source := fakeSource{
+		sessions: []SessionView{{Name: "bitcoin", Current: true}, {Name: "nix"}},
+		tabs:     tabs,
+		tabCalls: &queried,
+	}
+	m := newModel(context.Background(), source, &fakeJumper{}, &fakeCommander{}, "bitcoin")
+	_, cmd := m.Update(sessionsLoadedMsg{sessions: source.sessions})
+	runBatch(t, m, cmd)
+
+	// Open and close "nix" so its tabs are on hand, then let them go stale: while
+	// collapsed it is skipped by every refresh, so re-opening it is the moment its
+	// tabs have to be true again — held tabs are no reason to skip the query.
+	focusSession(t, m, "nix")
+	send(t, m, key("right"))
+	send(t, m, key("left"))
+	focusSession(t, m, "nix")
+	tabs["nix"] = []TabView{{Title: "nix-machinary:zjstatus"}}
+	queried = nil
+	send(t, m, key("right"))
+
+	require.Equal(t, []string{"nix"}, queried)
+	require.Contains(t, m.View(), "nix-machinary:zjstatus")
 }
 
 func TestModel_places_agent_under_its_tab_and_unknown_at_session_level(t *testing.T) {

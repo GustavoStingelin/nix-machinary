@@ -69,7 +69,13 @@ type ReviewView struct {
 type Source interface {
 	Sessions(ctx context.Context) ([]SessionView, error)
 	Tabs(ctx context.Context, session string) ([]TabView, error)
-	Agents(ctx context.Context, session string) ([]AgentView, error)
+	// Agents lists the session's agent records. liveTabs carries the session's
+	// tabs when the caller has just queried them, so records whose tab has since
+	// closed can be forgotten; an empty list means "no reliable tab list here",
+	// which skips that reconciliation rather than deleting live state. Taking the
+	// tabs as an argument keeps the caller's one tab query serving both, instead
+	// of costing the Zellij server a second one per refresh.
+	Agents(ctx context.Context, session string, liveTabs []TabView) ([]AgentView, error)
 	// Reviews lists pull requests awaiting the user's review, in any order — the
 	// model sorts them. It is the slowest source (a GitHub search plus a
 	// per-pull-request ref lookup), so the model loads it on its own schedule
