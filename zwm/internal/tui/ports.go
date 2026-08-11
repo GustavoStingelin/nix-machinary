@@ -66,6 +66,28 @@ type ReviewView struct {
 	Stale      bool
 }
 
+// RecentView is one managed worktree, offered as a way back into a tab that is
+// no longer open.
+//
+// Exactly one of Branch and PullRequest is set, because reopening differs: an
+// ordinary worktree comes back through `wco <branch>`, while a pull-request
+// worktree has to go back through `wpr <number>` — its branch is named
+// "zwm/pr-<n>-<hash>" but its tab is titled "<project>:pr-<n>", so checking the
+// branch out directly would leave two names for one worktree. Title is the tab
+// title its command produces, which is also how the dashboard tells whether that
+// tab is already open.
+type RecentView struct {
+	Project       string
+	Branch        string
+	PullRequest   string
+	IsPullRequest bool
+	Title         string
+	Worktree      string
+	// TouchedAt is the worktree directory's modification time, the ordering key.
+	// Zero when it could not be read.
+	TouchedAt time.Time
+}
+
 // Source supplies the dashboard's data. Each call may shell out to Zellij, gh,
 // or git, or read the agent-state store, so the model invokes them from tea.Cmd
 // goroutines.
@@ -79,6 +101,10 @@ type Source interface {
 	// tabs as an argument keeps the caller's one tab query serving both, instead
 	// of costing the Zellij server a second one per refresh.
 	Agents(ctx context.Context, session string, liveTabs []TabView) ([]AgentView, error)
+	// Recent lists managed worktrees, most recently touched first, as ways back
+	// into tabs that have been closed. It runs a Git call per project, so the model
+	// loads it once at startup and on an explicit refresh rather than on the tick.
+	Recent(ctx context.Context) ([]RecentView, error)
 	// Reviews lists pull requests awaiting the user's review, in any order — the
 	// model sorts them. It is the slowest source (a GitHub search plus a
 	// per-pull-request ref lookup), so the model loads it on its own schedule

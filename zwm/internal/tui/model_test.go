@@ -17,6 +17,8 @@ type fakeSource struct {
 	agents    map[string][]AgentView
 	reviews   []ReviewView
 	reviewErr error
+	recents   []RecentView
+	recentErr error
 	cached    []ReviewView
 	cachedAt  time.Time
 	cachedOK  bool
@@ -62,6 +64,12 @@ func (source fakeSource) Agents(_ context.Context, session string, liveTabs []Ta
 		}
 	}
 	return kept, nil
+}
+
+// Recent answers from a fixed list; the model decides what Enter does with each
+// row, which is what the tests below exercise.
+func (source fakeSource) Recent(context.Context) ([]RecentView, error) {
+	return source.recents, source.recentErr
 }
 
 type jumpCall struct{ session, tab, paneID string }
@@ -965,4 +973,115 @@ func TestHumanAge_reads_the_way_a_person_would_say_it(t *testing.T) {
 	require.Equal(t, "5m ago", humanAge(5*time.Minute))
 	require.Equal(t, "3h ago", humanAge(3*time.Hour))
 	require.Equal(t, "2d ago", humanAge(50*time.Hour))
+}
+
+// --- recent tabs ---
+
+// recentModel builds a dashboard whose current session ("bitcoin") has one open
+// tab, plus three managed worktrees: one whose tab is that open one, one closed
+// branch worktree, and one closed pull-request worktree.
+func recentModel(t *testing.T) (*model, *fakeJumper, *fakeCommander) {
+	t.Helper()
+	source := fakeSource{
+		sessions: []SessionView{{Name: "bitcoin", Current: true}},
+		tabs:     map[string][]TabView{"bitcoin": {{Title: "btcwallet:live"}}},
+		recents: []RecentView{
+			{Project: "btcwallet", Branch: "live", Title: "btcwallet:live", Worktree: "/wt/live"},
+			{Project: "btcwallet", Branch: "itests/accounts", Title: "btcwallet:itests/accounts", Worktree: "/wt/itests-accounts"},
+			{Project: "btcwallet", PullRequest: "1313", IsPullRequest: true, Title: "btcwallet:pr-1313", Worktree: "/wt/pr-1313"},
+		},
+	}
+	jumper := &fakeJumper{}
+	commander := &fakeCommander{}
+	m := newModel(context.Background(), source, jumper, commander, "bitcoin")
+	_, cmd := m.Update(sessionsLoadedMsg{sessions: source.sessions})
+	runBatch(t, m, cmd)
+	send(t, m, recentsLoadedMsg{recents: source.recents})
+	return m, jumper, commander
+}
+
+func focusRecent(t *testing.T, m *model, title string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selRecent && m.recents[row.recent].Title == title {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("recent row %q not among rows", title)
+}
+
+func TestRecent_lists_managed_worktrees_with_their_age(t *testing.T) {
+	m, _, _ := recentModel(t)
+	m.recents[1].TouchedAt = m.now().Add(-50 * time.Hour)
+	m.rebuildRows()
+
+	view := m.View()
+	require.Contains(t, view, "recent tabs")
+	require.Contains(t, view, "btcwallet:itests/accounts")
+	require.Contains(t, view, "2d ago")
+	// The worktree whose tab is open says so instead of an age, because Enter
+	// jumps to it rather than checking anything out.
+	require.Contains(t, view, "open")
+}
+
+func TestRecent_enter_jumps_when_the_tab_is_already_open(t *testing.T) {
+	m, jumper, commander := recentModel(t)
+	focusRecent(t, m, "btcwallet:live")
+
+	send(t, m, key("enter"))
+
+	require.Equal(t, []jumpCall{{session: "bitcoin", tab: "btcwallet:live"}}, jumper.calls)
+	require.Empty(t, commander.calls, "an open tab must not be checked out again")
+}
+
+func TestRecent_enter_reopens_a_closed_branch_worktree_with_wco(t *testing.T) {
+	m, jumper, commander := recentModel(t)
+	focusRecent(t, m, "btcwallet:itests/accounts")
+
+	_, cmd := m.Update(key("enter"))
+	require.NotNil(t, cmd)
+	require.IsType(t, commandDoneMsg{}, cmd())
+
+	require.Empty(t, jumper.calls)
+	require.Equal(t, []commandCall{{op: "wco", project: "btcwallet", arg: "itests/accounts"}}, commander.calls)
+}
+
+// A pull-request worktree's branch is "zwm/pr-<n>-<hash>" while its tab is
+// "<project>:pr-<n>", so reopening has to go back through wpr — a wco of that
+// branch would title the tab after the raw branch instead.
+func TestRecent_enter_reopens_a_pull_request_worktree_with_wpr_and_never_forces(t *testing.T) {
+	m, _, commander := recentModel(t)
+	focusRecent(t, m, "btcwallet:pr-1313")
+
+	_, cmd := m.Update(key("enter"))
+	require.NotNil(t, cmd)
+	require.IsType(t, commandDoneMsg{}, cmd())
+
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1313", force: false}}, commander.calls)
+}
+
+func TestRecent_section_is_absent_when_there_are_no_managed_worktrees(t *testing.T) {
+	m, _, _ := recentModel(t)
+	m.recents = nil
+	m.rebuildRows()
+
+	require.NotContains(t, m.View(), "recent tabs")
+	for _, row := range m.rows {
+		require.NotEqual(t, selRecent, row.kind)
+	}
+}
+
+func TestRecent_tab_cycles_into_the_section(t *testing.T) {
+	m, _, _ := recentModel(t)
+	// From the tree, Tab must reach the recent section rather than skipping it.
+	found := false
+	for range 4 {
+		m.cycleSection(1)
+		if row, ok := m.currentRow(); ok && row.kind == selRecent {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "tab never landed on the recent section")
 }

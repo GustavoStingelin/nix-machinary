@@ -67,6 +67,19 @@ func (m *model) displayLines() []displayLine {
 			row++
 		}
 	}
+	// Recent worktrees: a way back into a tab that has been closed, between the
+	// review queue and the tree because it is also a list of things to reopen
+	// rather than live state. Suppressed entirely when there is nothing to show,
+	// so a machine with no managed worktrees carries no empty section.
+	if m.recentsLoaded && len(m.recents) > 0 {
+		lines = append(lines, displayLine{text: dimStyle.Render("─── recent tabs ───"), row: -1})
+		for _, entry := range m.recents {
+			selected := m.cursor == row
+			open := m.tabIsOpenInCurrentSession(entry.Title)
+			lines = append(lines, displayLine{text: renderRecent(entry, open, m.now(), selected), row: row})
+			row++
+		}
+	}
 	lines = append(lines, displayLine{text: dimStyle.Render("─── sessions ───"), row: -1})
 
 	for _, session := range m.sessions {
@@ -286,6 +299,36 @@ func renderReview(review ReviewView, numberWidth int, selected bool) string {
 	return line + "  " + review.Title
 }
 
+// renderRecent renders one recent-worktree row: the tab it would restore, how
+// long ago it was touched, and — when that tab is already open in this session —
+// an "open" badge, because Enter jumps to it instead of checking anything out.
+func renderRecent(entry RecentView, open bool, now time.Time, selected bool) string {
+	line := gutter(selected) + entry.Title
+	if open {
+		return line + "  " + doneStyle.Render("open")
+	}
+	return line + "  " + dimStyle.Render(recentAge(entry.TouchedAt, now))
+}
+
+// recentAge renders a coarse age: the list only needs to convey "yesterday" from
+// "last month", and a zero time means the worktree could not be stat'd at all.
+func recentAge(touched, now time.Time) string {
+	if touched.IsZero() {
+		return "?"
+	}
+	elapsed := now.Sub(touched)
+	switch {
+	case elapsed < time.Minute:
+		return "just now"
+	case elapsed < time.Hour:
+		return fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+	case elapsed < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(elapsed.Hours()/24))
+	}
+}
+
 // rollupBadge summarizes a session's agents with the state that most wants the
 // user's attention.
 func rollupBadge(agents []AgentView) string {
@@ -308,8 +351,18 @@ func (m *model) footer() string {
 	}
 	// The review queue rebinds enter and adds two keys, so the hint follows the
 	// cursor rather than listing every binding at once.
-	if row, ok := m.currentRow(); ok && row.kind == selReview {
-		return footerStyle.Render("↑/↓ move · tab section · enter checkout · ctrl+f force · a review agent · b browser · r refresh · q quit")
+	if row, ok := m.currentRow(); ok {
+		switch row.kind {
+		case selReview:
+			return footerStyle.Render("↑/↓ move · tab section · enter checkout · ctrl+f force · a review agent · b browser · r refresh · q quit")
+		case selRecent:
+			// Enter means two different things here, so name the one this row does.
+			verb := "enter reopen"
+			if m.tabIsOpenInCurrentSession(m.recents[row.recent].Title) {
+				verb = "enter jump"
+			}
+			return footerStyle.Render("↑/↓ move · tab section · " + verb + " · r refresh · q quit")
+		}
 	}
 	return footerStyle.Render("↑/↓ move · tab section · enter jump · o open · w wco · p wpr · r refresh · q quit")
 }

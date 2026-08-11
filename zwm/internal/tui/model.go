@@ -50,6 +50,11 @@ type cachedReviewsMsg struct {
 // turning forever.
 type reviewsFailedMsg struct{ err error }
 
+// recentsLoadedMsg carries the managed-worktree list. A failure is reported as a
+// plain errMsg: unlike the review queue there is nothing on screen worth keeping,
+// and the section simply stays empty.
+type recentsLoadedMsg struct{ recents []RecentView }
+
 type reviewTickMsg struct{}
 
 type spinnerTickMsg struct{}
@@ -96,16 +101,19 @@ const (
 	selTab
 	selAgent
 	selReview
+	selRecent
 )
 
 // selection points at a navigable row: a session header, a tab within one, an
-// entry in the top agents panel, or a pull request in the review queue.
+// entry in the top agents panel, a pull request in the review queue, or a
+// managed worktree in the recent list.
 type selection struct {
 	kind    selKind
 	session int
 	tab     int
 	agent   int
 	review  int
+	recent  int
 }
 
 // agentEntry is one running agent in the top triage panel, flattened across all
@@ -128,6 +136,7 @@ type model struct {
 	sessions []sessionState
 	agents   []agentEntry
 	reviews  []ReviewView
+	recents  []RecentView
 	rows     []selection
 	cursor   int
 	offset   int
@@ -135,6 +144,9 @@ type model struct {
 	// reviewsLoaded distinguishes "no review requests" from "not fetched yet", so
 	// the section can say which.
 	reviewsLoaded bool
+	// recentsLoaded does the same for the recent list, which is empty both before
+	// its first load and on a machine with no managed worktrees.
+	recentsLoaded bool
 	// refreshing drives the spinner and, more importantly, stops a second fetch
 	// starting while one is in flight.
 	refreshing   bool
@@ -163,7 +175,14 @@ func newModel(ctx context.Context, source Source, jumper Jumper, commander Comma
 func (m *model) Init() tea.Cmd {
 	// The cached queue is a local file read, so it lands almost immediately and
 	// the review section has rows while the fetch behind it is still running.
-	return tea.Batch(m.loadSessionsCmd(), m.loadCachedReviewsCmd(), m.beginReviewRefresh(), tickCmd(), reviewTickCmd())
+	return tea.Batch(
+		m.loadSessionsCmd(),
+		m.loadCachedReviewsCmd(),
+		m.beginReviewRefresh(),
+		m.loadRecentsCmd(),
+		tickCmd(),
+		reviewTickCmd(),
+	)
 }
 
 // --- commands ---
@@ -220,6 +239,20 @@ func (m *model) loadReviewsCmd() tea.Cmd {
 			return reviewsFailedMsg{err}
 		}
 		return reviewsLoadedMsg{reviews}
+	}
+}
+
+// loadRecentsCmd lists the managed worktrees. It costs a Git call per project, so
+// it is loaded at startup and on an explicit `r` — never on the tick, whose whole
+// point is to stay cheap. The list only changes when a worktree is created or
+// removed, which is not something that happens behind the dashboard's back.
+func (m *model) loadRecentsCmd() tea.Cmd {
+	return func() tea.Msg {
+		recents, err := m.source.Recent(m.ctx)
+		if err != nil {
+			return errMsg{err}
+		}
+		return recentsLoadedMsg{recents}
 	}
 }
 
@@ -293,6 +326,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewsFromCache = false
 		m.reviewsFetchedAt = m.now()
 		m.refreshing = false
+		m.rebuildRows()
+		return m, nil
+	case recentsLoadedMsg:
+		m.recents = msg.recents
+		m.recentsLoaded = true
 		m.rebuildRows()
 		return m, nil
 	case reviewsFailedMsg:
@@ -372,7 +410,7 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.status = ""
-		return m, tea.Batch(m.loadSessionsCmd(), m.beginReviewRefresh())
+		return m, tea.Batch(m.loadSessionsCmd(), m.beginReviewRefresh(), m.loadRecentsCmd())
 	case "enter":
 		return m, m.activate()
 	case "ctrl+f":
@@ -398,7 +436,7 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // non-empty section, so Tab hops between the agents panel, the review queue, and
 // the session tree without scrolling through them.
 func (m *model) cycleSection(delta int) {
-	order := []selKind{selAgent, selReview, selSession}
+	order := []selKind{selAgent, selReview, selRecent, selSession}
 	starts := make([]int, 0, len(order))
 	for _, kind := range order {
 		if index, ok := m.firstRowOfKind(kind); ok {
@@ -571,6 +609,51 @@ func (m *model) collapse() tea.Cmd {
 	return nil
 }
 
+// activateRecent acts on a recent-worktree row. A worktree whose tab is still
+// open in the current session is a jump, not a checkout: re-running the command
+// would be slower and would land on the same tab anyway. Otherwise the row's
+// original command reopens it — `wco` for a branch worktree, `wpr` for a pull
+// request one, which is why the row records which it is.
+func (m *model) activateRecent() tea.Cmd {
+	row, ok := m.currentRow()
+	if !ok || row.kind != selRecent {
+		return nil
+	}
+	entry := m.recents[row.recent]
+	if m.tabIsOpenInCurrentSession(entry.Title) {
+		return m.jumpTo(JumpTarget{Session: m.current, Tab: entry.Title})
+	}
+	m.status = "reopening " + entry.Title + "…"
+	if entry.IsPullRequest {
+		// Never force from here: this row exists to get a tab back, and forcing
+		// would reset the worktree to the pull request's remote state, discarding
+		// whatever was being worked on. ctrl+f in the review queue is the explicit
+		// way to ask for that.
+		return m.runCommandCmd(func(ctx context.Context) error {
+			return m.commander.PullRequest(ctx, entry.Project, entry.PullRequest, false)
+		})
+	}
+	return m.runCommandCmd(func(ctx context.Context) error {
+		return m.commander.CheckoutExisting(ctx, entry.Project, entry.Branch)
+	})
+}
+
+// tabIsOpenInCurrentSession reports whether a tab with this title is open in the
+// session the dashboard was launched from — the only session it can jump to.
+func (m *model) tabIsOpenInCurrentSession(title string) bool {
+	for _, session := range m.sessions {
+		if session.name != m.current {
+			continue
+		}
+		for _, tab := range session.tabs {
+			if tab.Title == title {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (m *model) toggle() tea.Cmd {
 	row, ok := m.currentRow()
 	if !ok || row.kind != selSession {
@@ -597,6 +680,8 @@ func (m *model) activate() tea.Cmd {
 		// Plain open/reuse. Enter never discards local commits; ctrl+f is the
 		// explicit opt-in for resetting a stale worktree.
 		return m.activateReview(false, false)
+	case selRecent:
+		return m.activateRecent()
 	case selSession:
 		return m.toggle()
 	case selTab:
@@ -787,15 +872,19 @@ func reviewNumber(value string) int {
 }
 
 // rebuildRows recomputes the navigable rows: the agents panel first (so it has
-// priority for the cursor), then the review queue, then session headers and the
-// tab rows of expanded sessions. Keeps the cursor in range.
+// priority for the cursor), then the review queue, then the recent worktrees,
+// then session headers and the tab rows of expanded sessions. Keeps the cursor in
+// range.
 func (m *model) rebuildRows() {
-	rows := make([]selection, 0, len(m.agents)+len(m.reviews)+len(m.sessions))
+	rows := make([]selection, 0, len(m.agents)+len(m.reviews)+len(m.recents)+len(m.sessions))
 	for agentIndex := range m.agents {
 		rows = append(rows, selection{kind: selAgent, agent: agentIndex})
 	}
 	for reviewIndex := range m.reviews {
 		rows = append(rows, selection{kind: selReview, review: reviewIndex})
+	}
+	for recentIndex := range m.recents {
+		rows = append(rows, selection{kind: selRecent, recent: recentIndex})
 	}
 	for sessionIndex, session := range m.sessions {
 		rows = append(rows, selection{kind: selSession, session: sessionIndex})

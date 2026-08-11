@@ -8,6 +8,8 @@ import (
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/agentstate"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/cli"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/errs"
+	"github.com/GustavoStingelin/nix-machinary/zwm/internal/git"
+	"github.com/GustavoStingelin/nix-machinary/zwm/internal/project"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/tui"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
 )
@@ -22,8 +24,19 @@ func NewSystemTUI() cli.TUIRunner {
 	config := zellij.Config{Runner: zellij.SystemRunner{}, Environment: zellij.SystemEnvironment{}}
 	store := agentstate.NewStore(agentstate.Dir(os.LookupEnv))
 	current, _ := zellij.CurrentSession(config)
+	// The recent list needs the same project resolver and git client the commands
+	// use, so its keys and branches match the tab titles they produce.
+	gitClient := git.NewClient(git.Config{})
+	home, _ := os.LookupEnv("HOME")
 	return tui.NewRunner(
-		tuiSource{config: config, store: store, reviews: newReviewSource()},
+		tuiSource{
+			config:   config,
+			store:    store,
+			reviews:  newReviewSource(),
+			projects: project.NewResolver(projectRepository{client: gitClient}),
+			git:      gitClient,
+			home:     home,
+		},
 		tuiJumper{config: config, current: current},
 		tuiCommander{completer: NewSystemCompleter(), service: NewSystemService(), review: newReviewLauncher()},
 		current,
@@ -89,6 +102,11 @@ type tuiSource struct {
 	config  zellij.Config
 	store   *agentstate.Store
 	reviews reviewSource
+	// The recent-worktree list resolves each project under the code root and asks
+	// Git for its worktrees; see recent.go.
+	projects project.Resolver
+	git      git.Client
+	home     string
 }
 
 // Reviews delegates to the review source, which owns the GitHub and git calls.
