@@ -1,0 +1,13 @@
+[package]
+name = "zwm-bar"
+version = "0.1.0"
+edition = "2021"
+description = "Zellij status bar showing the input mode, session name and tabs, without zjstatus's per-second session-manifest decoding."
+
+[dependencies]
+zellij-tile = "0.44.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

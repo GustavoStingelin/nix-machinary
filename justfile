@@ -74,8 +74,22 @@ build-zwm-attn:
     cp zellij-plugins/zwm-attn/target/wasm32-wasip1/release/zwm-attn.wasm zellij-plugins/zwm-attn/dist/zwm-attn.wasm
     @echo "Vendored zellij-plugins/zwm-attn/dist/zwm-attn.wasm"
 
+# Rebuild the vendored zwm-bar status-bar WASM, same requirements as
+# build-zwm-attn. Run after editing the plugin, then commit dist/zwm-bar.wasm.
+# Note that the store path changes with the artifact, and Zellij keys plugin
+# permissions by path — so a rebuilt bar asks for its permission again.
+build-zwm-bar:
+    cd zellij-plugins/zwm-bar && cargo build --release --target wasm32-wasip1
+    cp zellij-plugins/zwm-bar/target/wasm32-wasip1/release/zwm-bar.wasm zellij-plugins/zwm-bar/dist/zwm-bar.wasm
+    @echo "Vendored zellij-plugins/zwm-bar/dist/zwm-bar.wasm"
+
+# Unit-test zwm-bar's rendering. The crate targets wasm32-wasip1, where a test
+# binary cannot run, so the pure render module is tested against the host.
+test-zwm-bar:
+    cd zellij-plugins/zwm-bar && cargo test --lib --target "$(rustc -vV | awk '/^host:/{print $2}')"
+
 # Check flake
-check: zwm-check
+check: zwm-check test-zwm-bar
     nix flake check
 
 collect-garbage:
