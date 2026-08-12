@@ -9,9 +9,11 @@
 //! ```
 //!
 //! This plugin maps that pane id to its tab and prefixes the tab name with a
-//! glyph so it stands out in the (zjstatus) tab bar. Focusing the tab retires
-//! the glyph to a blank marker of the same width — the marker in the tab name
-//! is the entire state, so no bookkeeping is needed.
+//! marker carrying the agent's state, which zwm-bar reads back and draws as a
+//! glyph — a turning spinner while the agent works, a dot when it is blocked on
+//! the user, a check when it is done. The marker in the tab name is the entire
+//! state, so this plugin keeps no bookkeeping of its own; the vocabulary and the
+//! transitions live in the zwm-tabmark crate, which both plugins share.
 //!
 //! The same pipe also serves `event=focus`, which focuses the pane instead of
 //! marking its tab. That exists because the Zellij 0.43.1 CLI can focus a tab
@@ -21,25 +23,15 @@
 use std::collections::BTreeMap;
 
 use zellij_tile::prelude::*;
-
-/// Leading marker added to a tab name. zjstatus renders the raw tab name, so
-/// this shows verbatim in the bar. The trailing space keeps it legible.
-const GLYPH: &str = "● ";
-
-/// What the glyph becomes once the user has seen it. Same display width as
-/// GLYPH, so clearing a mark does not shrink the tab and shove every tab to its
-/// right two columns across — the dot just vanishes in place. Removing the
-/// marker outright is tidier in the name but reflows the whole bar ~120ms after
-/// the tab is already focused, which reads as a glitch. The cost is a permanent
-/// two-column indent on any tab that has ever been marked.
-const CLEARED: &str = "  ";
+use zwm_tabmark as tabmark;
 
 /// Pipe name the completion hooks address (`zellij pipe --name`).
 const PIPE_NAME: &str = "zwm-attn";
 
 /// `event=` value asking for a pane to be focused rather than for its tab to be
-/// marked. Every other value is an agent attention state (working/waiting/done).
-/// Must stay in sync with focusEvent in zwm/internal/zellij/pipe.go.
+/// marked. Every other value is an agent attention state, decided by
+/// `tabmark::Mark::from_signal`. Must stay in sync with focusEvent in
+/// zwm/internal/zellij/pipe.go.
 const FOCUS_EVENT: &str = "focus";
 
 /// First Zellij release where `rename_tab` addresses the tab at a *display
@@ -63,6 +55,9 @@ struct State {
     pane_to_tab: BTreeMap<u32, usize>,
     /// Whether this host renames the tab we actually mean (see MIN_RENAME_VERSION).
     can_rename_tabs: bool,
+    /// Whether the first tab list has been swept of spinners left behind by a
+    /// session that died while an agent was working (tabmark::on_plugin_load).
+    swept: bool,
 }
 
 register_plugin!(State);
@@ -98,7 +93,17 @@ impl ZellijPlugin for State {
             Event::TabUpdate(tabs) => {
                 self.tabs = tabs;
                 self.rebuild_pane_map();
-                // Focusing a marked tab is the "I've seen it" signal.
+                // A resurrected session brings its tab names back verbatim, so
+                // retire any spinner before it turns for an agent that is gone.
+                // Only the first list needs it: from here on this plugin is the
+                // only thing writing markers.
+                if !self.swept {
+                    self.swept = true;
+                    self.sweep();
+                }
+                // Focusing a marked tab is the "I've seen it" signal. The sweep
+                // above touches working markers only, so the two never race for
+                // the same tab.
                 self.clear_focused();
             }
             Event::PaneUpdate(panes) => {
@@ -138,18 +143,13 @@ impl ZellijPlugin for State {
         let Some(tab) = self.tabs.get(index) else {
             return false;
         };
-        // Nothing to signal if the user is already looking at the tab, and
-        // never stack the glyph on repeated events.
-        if tab.active || tab.name.starts_with(GLYPH) {
-            return false;
+        // Which marker this signal calls for — including none at all, when the
+        // tab already says what the signal would say (agents signal on every
+        // turn, and every rename wakes every plugin in the session).
+        let signal = message.args.get("event").map(String::as_str).unwrap_or_default();
+        if let Some(name) = tabmark::on_signal(&tab.name, signal, tab.active) {
+            rename_tab(display_position(index), name);
         }
-        // Reuse the cleared slot when this tab has been marked before, so the
-        // name keeps its width instead of growing two columns per cycle.
-        let name = match tab.name.strip_prefix(CLEARED) {
-            Some(rest) => format!("{GLYPH}{rest}"),
-            None => format!("{GLYPH}{}", tab.name),
-        };
-        rename_tab(display_position(index), name);
         false
     }
 
@@ -175,17 +175,26 @@ impl State {
         }
     }
 
-    /// Retire the glyph on the currently focused tab, if present, leaving the
-    /// same-width CLEARED marker so the tab bar does not reflow.
+    /// Dismiss the notification on the currently focused tab, if it carries one.
+    /// A working marker survives: it is the agent's status, not something the
+    /// user needs to be told twice.
     fn clear_focused(&self) {
+        self.retitle(|tab| if tab.active { tabmark::on_focus(&tab.name) } else { None });
+    }
+
+    /// Retire spinners inherited from a previous life of this session.
+    fn sweep(&self) {
+        self.retitle(|tab| tabmark::on_plugin_load(&tab.name));
+    }
+
+    /// Rename every tab for which `next` returns a new name.
+    fn retitle(&self, next: impl Fn(&TabInfo) -> Option<String>) {
         if !self.can_rename_tabs {
             return;
         }
         for (index, tab) in self.tabs.iter().enumerate() {
-            if tab.active {
-                if let Some(stripped) = tab.name.strip_prefix(GLYPH) {
-                    rename_tab(display_position(index), format!("{CLEARED}{stripped}"));
-                }
+            if let Some(name) = next(tab) {
+                rename_tab(display_position(index), name);
             }
         }
     }

@@ -5,14 +5,17 @@ import (
 	"strings"
 )
 
-// attentionGlyph is the prefix the zwm-attn plugin prepends to a tab name when
-// an agent in that tab needs attention. clearedMarker is what the plugin leaves
-// behind once the user has seen it: the same display width, so the tab bar does
-// not reflow, which means a seen tab keeps a two-column indent forever. Both
-// must stay byte-for-byte identical to GLYPH and CLEARED in
-// zellij-plugins/zwm-attn/src/main.rs.
+// The markers the zwm-attn plugin keeps at the front of a tab name to carry the
+// attention state of the agents inside it. Each is two columns wide, so a state
+// change never reflows the tab bar; clearedMarker is the blank a marker the user
+// has seen retires to, which means a tab an agent has run in keeps a two-column
+// indent forever. All four must stay byte-for-byte identical to the constants in
+// zellij-plugins/zwm-tabmark/src/lib.rs, which is where the rules that maintain
+// them live.
 const (
+	workingGlyph   = "◐ "
 	attentionGlyph = "● "
+	doneGlyph      = "✓ "
 	clearedMarker  = "  "
 )
 
@@ -126,14 +129,17 @@ func parseTabs(stdout string) []Tab {
 }
 
 func parseTab(line string) Tab {
-	if stripped, ok := strings.CutPrefix(line, attentionGlyph); ok {
-		return Tab{Title: stripped, NeedsAttention: true}
-	}
-	// A tab whose mark has been cleared keeps the blank marker, so the title has
-	// to be recovered here too — otherwise Launch would miss the tab and open a
-	// second one carrying the same title.
-	if stripped, ok := strings.CutPrefix(line, clearedMarker); ok {
-		return Tab{Title: stripped}
+	// Every marker has to be recognised, not just the ones that mean something
+	// here: the title is what Launch matches an existing tab on and what a jump
+	// resolves against, so a marker left in it would open a second tab carrying
+	// the same title, or jump nowhere.
+	for _, marker := range []string{attentionGlyph, doneGlyph, workingGlyph, clearedMarker} {
+		if stripped, ok := strings.CutPrefix(line, marker); ok {
+			// Waiting and done are the states that want the user; a working agent
+			// is just busy, and the dashboard shows its own spinner for it.
+			needsAttention := marker == attentionGlyph || marker == doneGlyph
+			return Tab{Title: stripped, NeedsAttention: needsAttention}
+		}
 	}
 	return Tab{Title: line}
 }

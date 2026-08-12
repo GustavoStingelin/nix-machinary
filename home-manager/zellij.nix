@@ -35,7 +35,10 @@ let
   # with no user input spent 94s of wasm CPU per 150s of wall clock, all under
   # apply_event_to_plugin, and spiked past 500% when a burst of events reached
   # every instance at once. zwm-bar takes ModeUpdate (which carries the session
-  # name too) and TabUpdate, and nothing else, so an idle session is idle.
+  # name too) and TabUpdate, which between them are the whole bar, so an idle
+  # session is idle. It also subscribes to Visible and Timer, but only to turn the
+  # spinner on a tab whose agent is working, and only in the one instance the user
+  # can see — see the module docs in zellij-plugins/zwm-bar/src/main.rs.
   #
   # It also needs no configuration: the colours, separators and spacing that used
   # to live in the format strings here now live in the plugin, ported from them.
@@ -90,7 +93,8 @@ in
     }
 
     // Load one headless zwm-attn instance per session so it can mark any tab
-    // with an attention glyph when an agent finishes / needs input.
+    // with the state of the agents inside it — working, waiting for you, done —
+    // which zwm-bar reads back out of the tab name and draws.
     load_plugins {
       zwm-attn
     }

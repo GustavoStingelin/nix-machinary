@@ -71,12 +71,15 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 
 	// "closed" means the agent process exited (its editor's exit hook), so forget
 	// the record — the pane/tab may still be open, so tab reconciliation can't
-	// catch this. No glyph pipe: piping would re-mark the tab, and the plugin
-	// clears the glyph itself on focus.
+	// catch this. It is piped on as well, to retire the tab's marker: an agent
+	// that has gone away has no state to show, and nothing else clears the
+	// working marker, which would otherwise leave the tab spinning for an agent
+	// that no longer exists.
 	if signal == closedSignal {
 		if sessionName != "" && paneID != "" {
 			_ = recorder.store.Delete(sessionName, paneID)
 		}
+		recorder.pipe(ctx, paneID, closedSignal)
 		return nil
 	}
 
@@ -99,12 +102,17 @@ func (recorder attnRecorder) Record(ctx context.Context, signal, agent string) e
 		}
 	}
 
-	// Fire the tab glyph best-effort: it is cosmetic, and a hook must not fail
-	// (or stall) because the plugin is missing or the pipe wedged.
+	recorder.pipe(ctx, paneID, string(state))
+	return nil
+}
+
+// pipe hands the plugin a pane's new state so it can mark the pane's tab.
+// Best-effort: the marker is cosmetic, and a hook must not fail (or stall)
+// because the plugin is missing or the pipe wedged.
+func (recorder attnRecorder) pipe(ctx context.Context, paneID, signal string) {
 	pipeCtx, cancel := context.WithTimeout(ctx, attnPipeTimeout)
 	defer cancel()
-	_, _ = recorder.runner.Run(pipeCtx, zellij.AttnPipe(paneID, string(state)))
-	return nil
+	_, _ = recorder.runner.Run(pipeCtx, zellij.AttnPipe(paneID, signal))
 }
 
 // tabTitle best-effort reconstructs the current pane's tab title; failures yield

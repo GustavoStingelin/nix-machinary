@@ -6,6 +6,8 @@ description = "Zellij status bar showing the input mode, session name and tabs, 
 
 [dependencies]
 zellij-tile = "0.44.3"
+# The tab-name marker zwm-attn writes, which this bar reads back and draws.
+zwm-tabmark = { path = "../zwm-tabmark" }
 
 [profile.release]
 opt-level = "z"

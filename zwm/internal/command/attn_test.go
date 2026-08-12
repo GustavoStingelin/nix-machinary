@@ -123,7 +123,7 @@ func TestManagedPRSuffix_maps_pr_branches_and_ignores_others(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestAttnRecord_closed_forgets_the_record_without_a_pipe(t *testing.T) {
+func TestAttnRecord_closed_forgets_the_record_and_retires_the_tab_marker(t *testing.T) {
 	// Given a recorded agent in a live session
 	recorder, runner, store := newTestAttnRecorder(t, serviceTestEnvironment{
 		zellij.EnvironmentZellij:            "0",
@@ -131,17 +131,21 @@ func TestAttnRecord_closed_forgets_the_record_without_a_pipe(t *testing.T) {
 		zellij.EnvironmentZellijPaneID:      "5",
 	})
 	require.NoError(t, recorder.Record(context.Background(), "done", "opencode"))
-	require.Len(t, runner.commands, 1) // the done glyph pipe
+	require.Len(t, runner.commands, 1) // the done marker pipe
 
 	// When the agent process exits
 	err := recorder.Record(context.Background(), "closed", "opencode")
 
-	// Then the record is forgotten and no glyph pipe is fired (which would
-	// re-mark the tab).
+	// Then the record is forgotten...
 	require.NoError(t, err)
-	require.Len(t, runner.commands, 1)
 	_, ok := store.Read("bitcoin", "5")
 	require.False(t, ok)
+
+	// ...and the exit is piped on, so the plugin retires the tab's marker: an
+	// agent that has gone away has no state to show, and nothing else clears a
+	// working marker.
+	require.Len(t, runner.commands, 2)
+	require.Contains(t, runner.commands[1].Args, "pane_id=5,event=closed")
 }
 
 func TestAttnRecord_rejects_an_unknown_state(t *testing.T) {

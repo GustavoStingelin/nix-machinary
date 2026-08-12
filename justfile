@@ -88,6 +88,11 @@ build-zwm-bar:
 test-zwm-bar:
     cd zellij-plugins/zwm-bar && cargo test --lib --target "$(rustc -vV | awk '/^host:/{print $2}')"
 
+# Unit-test the tab-name marker both plugins share: the state vocabulary and the
+# rules that decide when a tab is renamed. Host toolchain, like test-zwm-bar.
+test-zwm-tabmark:
+    cd zellij-plugins/zwm-tabmark && cargo test --lib
+
 # Swap rebuilt plugins into every running session, without restarting any of
 # them. Zellij reloads every instance of a plugin *location* in place, re-reading
 # the file from disk, which works only because the layouts point at a stable path
@@ -111,10 +116,18 @@ reload-zellij-plugins:
           echo "$session: FAILED to reload $plugin" >&2
         fi
       done
+      # A reloaded bar does not know whether it is on screen: Zellij reports
+      # visibility only when it changes, and a reload is not a change. Until it
+      # learns, it holds the spinner still (see zwm-bar/src/main.rs). Switching
+      # away and back announces it for the focused tab and leaves the focus where
+      # it was. Tab actions are ignored in a detached session, where there is
+      # nothing on screen to fix anyway.
+      zellij --session "$session" action go-to-next-tab >/dev/null 2>&1 || true
+      zellij --session "$session" action go-to-previous-tab >/dev/null 2>&1 || true
     done
 
 # Check flake
-check: zwm-check test-zwm-bar
+check: zwm-check test-zwm-bar test-zwm-tabmark
     nix flake check
 
 collect-garbage:

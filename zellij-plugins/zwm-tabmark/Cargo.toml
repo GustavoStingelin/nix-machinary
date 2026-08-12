@@ -1,0 +1,9 @@
+[package]
+name = "zwm-tabmark"
+version = "0.1.0"
+edition = "2021"
+description = "The tab-name marker zwm-attn writes and zwm-bar reads: an agent's attention state carried in a Zellij tab name."
+
+# No dependencies on purpose: both plugins build for wasm32-wasip1, and this
+# crate's tests run on the host toolchain.
+[dependencies]

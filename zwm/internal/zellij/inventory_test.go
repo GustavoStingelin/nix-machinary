@@ -31,11 +31,11 @@ func TestListSessions_parses_names_and_exited_status_with_exact_argv(t *testing.
 	}, sessions)
 }
 
-func TestQueryTabNames_routes_to_the_named_session_and_strips_the_glyph(t *testing.T) {
-	// Given a session whose second tab carries the attention glyph
+func TestQueryTabNames_routes_to_the_named_session_and_strips_every_marker(t *testing.T) {
+	// Given a session whose tabs carry each of the agent-state markers
 	log := &callLog{}
 	runner := &fakeRunner{log: log, responses: []runResponse{
-		{output: Output{Stdout: "editor\n● agent\nlogs\n  seen\n"}},
+		{output: Output{Stdout: "editor\n● agent\n◐ builder\n✓ tested\nlogs\n  seen\n"}},
 	}}
 
 	// When
@@ -47,12 +47,14 @@ func TestQueryTabNames_routes_to_the_named_session_and_strips_the_glyph(t *testi
 	}
 	assertEqual(t, Command{Name: CommandZellij, Args: []string{"--session", "bitcoin", "action", "query-tab-names"}}, runner.commands[0])
 
-	// ...and only the glyphed tab is flagged, with the glyph stripped from its
-	// title. A tab whose mark was cleared keeps the blank marker in Zellij, so it
-	// reports the bare title and no attention.
+	// ...every marker is stripped from the title, and the two that mean the agent
+	// wants the user are the ones flagged: a working tab is merely busy, and a
+	// cleared marker is one the user has already seen.
 	assertEqual(t, []Tab{
 		{Title: "editor"},
 		{Title: "agent", NeedsAttention: true},
+		{Title: "builder"},
+		{Title: "tested", NeedsAttention: true},
 		{Title: "logs"},
 		{Title: "seen"},
 	}, tabs)

@@ -2675,4 +2675,9 @@ name = "zwm-bar"
 version = "0.1.0"
 dependencies = [
  "zellij-tile",
+ "zwm-tabmark",
 ]
+
+[[package]]
+name = "zwm-tabmark"
+version = "0.1.0"

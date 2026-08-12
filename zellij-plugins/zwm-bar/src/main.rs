@@ -1,4 +1,5 @@
-//! zwm-bar — the session's status line: input mode, session name, tabs.
+//! zwm-bar — the session's status line: input mode, session name, tabs, and the
+//! attention state of the agents running in each tab.
 //!
 //! It replaces zjstatus, which had become the single largest CPU consumer in a
 //! Zellij session here. zjstatus subscribes to `SessionUpdate`, and Zellij 0.44
@@ -17,13 +18,41 @@
 //!
 //! The colours, separators and spacing are ported from the zjstatus format
 //! strings this replaces, so the bar looks the same. Rendering lives in `bar`.
+//!
+//! # The agent state glyphs, and what animating them costs
+//!
+//! zwm-attn keeps each tab's agent state in a marker at the front of the tab
+//! name (see the zwm-tabmark crate), so it arrives here inside the `TabUpdate`
+//! this bar already reads — no extra subscription, no extra permission. The bar
+//! strips the marker and draws the state itself: a spinner turning while an agent
+//! works, a maroon dot when it wants the user, a green check when it is done,
+//! matching what `zwm tui` shows for the same agents.
+//!
+//! Turning the spinner needs a timer, and a timer is exactly the shape of the
+//! problem that got zjstatus removed — so it is gated twice. It is armed only
+//! while some tab is actually working, which is zero cost in an idle session, and
+//! only in the bar the user can see: `Tab::visible` in zellij-server sends
+//! `Event::Visible` to every plugin pane in a tab as it is switched to or away
+//! from, and `apply_event_to_plugin` renders a plugin whenever its `update` asks
+//! for it *without checking whether its tab is on screen*.
+//!
+//! Both gates matter, because a render here is not cheap: the zjstatus
+//! measurement above works out to ~70ms of interpreter CPU per render. One
+//! spinner ungated across a twelve-tab session would be ~96 renders a second.
+//! Gated, it is eight, in the one pane that can show them.
 
 use std::collections::BTreeMap;
 
 use zellij_tile::prelude::*;
+use zwm_tabmark::{self as tabmark, Mark};
 // Imported as a module, not by item: register_plugin! generates its own
 // `render` export, which a bare `use ...::render` would collide with.
 use zwm_bar::bar::{self, ModeColour, Tab};
+
+/// How long between spinner frames. Matches spinnerInterval in
+/// zwm/internal/tui/model.go, so a working agent turns at the same rate in the
+/// bar and in the dashboard.
+const SPINNER_INTERVAL: f64 = 0.12;
 
 #[derive(Default)]
 struct State {
@@ -32,6 +61,13 @@ struct State {
     mode: Option<InputMode>,
     session: Option<String>,
     tabs: Vec<TabInfo>,
+    /// Which spinner frame the working tabs are on.
+    frame: usize,
+    /// Whether this instance's tab is on screen; see the module docs.
+    visible: bool,
+    /// Whether a spinner timer is already pending, so events arriving between
+    /// frames cannot stack up a second one.
+    ticking: bool,
 }
 
 register_plugin!(State);
@@ -48,8 +84,21 @@ impl ZellijPlugin for State {
         subscribe(&[
             EventType::ModeUpdate,
             EventType::TabUpdate,
+            EventType::Visible,
+            EventType::Timer,
             EventType::PermissionRequestResult,
         ]);
+        // `visible` starts false, and nothing here sets it: Zellij reports
+        // visibility only when it *changes*, and there is no call to ask. Of the
+        // two ways to be wrong, this is the cheap one. Guessing visible would have
+        // every tab of a resurrected session animating — `apply_layout` announces
+        // the tab clients are moved into and `add_client` announces nothing, so a
+        // background tab restored from disk is never told it is not on screen, and
+        // the guess would stand until the user happened to visit it. Guessing
+        // invisible instead costs a spinner that stays still until the first tab
+        // switch, which announces both tabs involved and settles it for good.
+        // Reloading the plugin under a live session lands in that window too,
+        // which is why `just reload-zellij-plugins` nudges the focus afterwards.
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -70,7 +119,28 @@ impl ZellijPlugin for State {
             Event::TabUpdate(tabs) => {
                 let changed = self.tabs != tabs;
                 self.tabs = tabs;
+                // A rename is how an agent's state reaches this bar, so a tab may
+                // have just started (or stopped) working.
+                self.arm_spinner();
                 changed
+            },
+            Event::Visible(visible) => {
+                self.visible = visible;
+                // Becoming visible starts the spinner; becoming invisible simply
+                // stops it being re-armed once the pending frame fires. Zellij
+                // repaints the pane from its grid on a tab switch, so there is
+                // nothing to redraw here.
+                self.arm_spinner();
+                false
+            },
+            Event::Timer(_) => {
+                self.ticking = false;
+                if !self.spinning() {
+                    return false;
+                }
+                self.frame = self.frame.wrapping_add(1);
+                self.arm_spinner();
+                true
             },
             Event::PermissionRequestResult(_) => {
                 // The prompt is done with this pane, so retire it from the focus
@@ -90,12 +160,18 @@ impl ZellijPlugin for State {
         let tabs: Vec<Tab> = self
             .tabs
             .iter()
-            .map(|tab| Tab {
-                index: tab.position + 1,
-                name: tab.name.clone(),
-                active: tab.active,
-                fullscreen: tab.is_fullscreen_active,
-                sync: tab.is_sync_panes_active,
+            .map(|tab| {
+                // The agent state travels in the tab name; the bar shows the
+                // title and draws the state as a glyph of its own.
+                let (mark, title) = tabmark::split(&tab.name);
+                Tab {
+                    index: tab.position + 1,
+                    name: title.to_owned(),
+                    active: tab.active,
+                    fullscreen: tab.is_fullscreen_active,
+                    sync: tab.is_sync_panes_active,
+                    mark,
+                }
             })
             .collect();
         print!(
@@ -105,8 +181,31 @@ impl ZellijPlugin for State {
                 self.session.as_deref(),
                 &tabs,
                 cols,
+                self.frame,
             )
         );
+    }
+}
+
+impl State {
+    /// Whether this bar should be turning a spinner: some tab is working, and the
+    /// user can see this instance.
+    fn spinning(&self) -> bool {
+        self.visible
+            && self
+                .tabs
+                .iter()
+                .any(|tab| tabmark::split(&tab.name).0 == Mark::Working)
+    }
+
+    /// Ask for the next spinner frame, unless one is already pending or there is
+    /// nothing to animate.
+    fn arm_spinner(&mut self) {
+        if self.ticking || !self.spinning() {
+            return;
+        }
+        self.ticking = true;
+        set_timeout(SPINNER_INTERVAL);
     }
 }
 
