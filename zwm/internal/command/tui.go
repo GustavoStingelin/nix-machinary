@@ -212,7 +212,9 @@ func (jumper tuiJumper) JumpTo(ctx context.Context, target tui.JumpTarget) error
 	if target.Session != jumper.current {
 		return errs.New(errs.External, "cross-session jump is not supported yet")
 	}
-	if _, err := zellij.GoToTab(ctx, jumper.config, target.Tab); err != nil {
+	// By title, not by name: the tab of an agent that has signalled carries a
+	// state marker that go-to-tab-name would fail to match.
+	if _, err := zellij.FocusTabTitle(ctx, jumper.config, target.Tab); err != nil {
 		return err
 	}
 	if target.PaneID == "" {

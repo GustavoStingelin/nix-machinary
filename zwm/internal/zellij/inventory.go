@@ -56,9 +56,28 @@ func QueryTabNames(ctx context.Context, config Config, session string) ([]Tab, e
 	return parseTabs(output.Stdout), nil
 }
 
-// GoToTab focuses a tab by name in the current session. Cross-session switching
-// is not possible from the Zellij 0.43.1 CLI while attached, so this only works
-// for the caller's own session.
+// FocusTabTitle focuses the tab with the given title in the current session.
+//
+// The title is not always the tab's name: zwm-attn keeps a marker at the front
+// of the name, and Zellij matches go-to-tab-name against the raw name
+// (screen.rs compares `t.name == name`), so passing the marker-stripped title
+// finds nothing and silently does nothing — which is what the dashboard's Enter
+// did for every tab an agent had ever run in. Recover the raw name first. If the
+// query fails the title is sent as-is, which is no worse than not trying.
+func FocusTabTitle(ctx context.Context, config Config, title string) (Output, error) {
+	name := title
+	if output, err := config.Runner.Run(ctx, tabNamesCommand()); err == nil {
+		if raw, found := findTabName(output.Stdout, TabTitle(title)); found {
+			name = raw
+		}
+	}
+	return GoToTab(ctx, config, name)
+}
+
+// GoToTab focuses a tab by its raw name — markers included — in the current
+// session. Callers holding a title rather than a name want FocusTabTitle.
+// Cross-session switching is not possible from the Zellij 0.43.1 CLI while
+// attached, so this only works for the caller's own session.
 func GoToTab(ctx context.Context, config Config, tab string) (Output, error) {
 	command := Command{Name: CommandZellij, Args: []string{"action", "go-to-tab-name", tab}}
 	output, err := config.Runner.Run(ctx, command)

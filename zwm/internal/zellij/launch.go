@@ -14,15 +14,9 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 		return Result{}, err
 	}
 
-	tabNames, err := config.Runner.Run(ctx, Command{
-		Name: CommandZellij,
-		Args: []string{"action", "query-tab-names"},
-	})
+	tabNames, err := config.Runner.Run(ctx, tabNamesCommand())
 	if err != nil {
-		return Result{}, externalFailure("query Zellij tab names", Command{
-			Name: CommandZellij,
-			Args: []string{"action", "query-tab-names"},
-		}, tabNames, err)
+		return Result{}, externalFailure("query Zellij tab names", tabNamesCommand(), tabNames, err)
 	}
 
 	if name, found := findTabName(tabNames.Stdout, input.Title); found {
@@ -52,6 +46,12 @@ func Launch(ctx context.Context, config Config, input Input) (Result, error) {
 		return Result{}, externalFailure("create Zellij tab", command, output, createErr)
 	}
 	return Result{Action: Created, Title: input.Title, Cwd: input.Cwd, Output: output}, nil
+}
+
+// tabNamesCommand lists the current session's tab names, marker and all. Both
+// the launch path and a jump use it to recover a tab's raw name from its title.
+func tabNamesCommand() Command {
+	return Command{Name: CommandZellij, Args: []string{"action", "query-tab-names"}}
 }
 
 // findTabName locates an existing tab by title and returns the tab's current

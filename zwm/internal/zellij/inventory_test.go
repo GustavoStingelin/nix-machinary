@@ -2,6 +2,7 @@ package zellij
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -55,6 +56,45 @@ func TestQueryTabNames_routes_to_the_named_session_and_strips_the_glyph(t *testi
 		{Title: "logs"},
 		{Title: "seen"},
 	}, tabs)
+}
+
+func TestFocusTabTitle_focuses_the_tab_by_its_raw_marked_name(t *testing.T) {
+	// Given a session where the wanted tab carries a marker
+	log := &callLog{}
+	runner := &fakeRunner{log: log, responses: []runResponse{
+		{output: Output{Stdout: "editor\n● agent\n"}},
+		{},
+	}}
+
+	// When the dashboard jumps to it by title
+	if _, err := FocusTabTitle(context.Background(), Config{Runner: runner}, "agent"); err != nil {
+		t.Fatalf("focus tab title: %v", err)
+	}
+
+	// Then the name Zellij is given is the marked one it will actually match:
+	// go-to-tab-name compares raw names, so sending "agent" would do nothing.
+	assertEqual(t, tabNamesCommand(), runner.commands[0])
+	assertEqual(t, Command{Name: CommandZellij, Args: []string{"action", "go-to-tab-name", "● agent"}}, runner.commands[1])
+}
+
+func TestFocusTabTitle_falls_back_to_the_title_when_the_tab_cannot_be_resolved(t *testing.T) {
+	// Given a query that fails, and one that simply does not list the tab
+	for name, responses := range map[string][]runResponse{
+		"query fails":   {{err: errors.New("zellij is not running")}, {}},
+		"tab is absent": {{output: Output{Stdout: "editor\n"}}, {}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := &fakeRunner{log: &callLog{}, responses: responses}
+
+			// When
+			if _, err := FocusTabTitle(context.Background(), Config{Runner: runner}, "agent"); err != nil {
+				t.Fatalf("focus tab title: %v", err)
+			}
+
+			// Then the title is sent as-is, which is no worse than not trying.
+			assertEqual(t, Command{Name: CommandZellij, Args: []string{"action", "go-to-tab-name", "agent"}}, runner.commands[1])
+		})
+	}
 }
 
 func TestGoToTab_uses_exact_argv(t *testing.T) {
