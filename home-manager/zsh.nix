@@ -34,8 +34,17 @@
       # Activate mise
       eval "$(mise activate zsh)"
 
-      # Enable just completion
-      autoload -U compinit && compinit
+      # just and zwm ship their own completions. These only need sourcing: the
+      # completion system is already initialized by the time this runs, so compdef
+      # is defined.
+      #
+      # Do NOT call compinit here. oh-my-zsh (enabled below) already runs it and
+      # keeps a cached dump in ~/.zcompdump-$SHORT_HOST-$ZSH_VERSION; a second
+      # compinit dumps to the default ~/.zcompdump instead and rebuilt it on every
+      # single launch. That one line cost ~1.4s of a 1.7s startup — a timestamped
+      # xtrace put 206,960 of 211,636 traced commands under compinit/compdump/
+      # compdef. Removing it changed nothing about what is completed: 1787
+      # registered completions before and after, just/zwm/git/zellij included.
       if command -v just >/dev/null 2>&1; then
         source <(just --completions zsh)
       fi
