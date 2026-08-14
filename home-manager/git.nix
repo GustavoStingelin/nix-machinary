@@ -3,10 +3,6 @@
   programs.git = {
     enable = true;
 
-    # User git configuration
-    userName = "Gustavo Stingelin";
-    userEmail = "gustavo.stingelin@outlook.com";
-
     ignores = [
       "debug/"
       "target/"
@@ -67,16 +63,23 @@
       
     ];
 
-    extraConfig = {
+    settings = {
+      # User git configuration
+      user = {
+        name = "Gustavo Stingelin";
+        email = "gustavo.stingelin@outlook.com";
+
+        # GPG signing configuration
+        signingkey = "0x15CBADFE29F2017B";
+      };
+
       init.defaultBranch = "main";
       core.editor = "hx";
 
-      # Delta pager options (core.pager and interactive.diffFilter are set automatically by programs.git.delta)
+      # Delta pager options (core.pager and interactive.diffFilter are set automatically by programs.delta)
       merge.conflictstyle = "diff3";
       diff.colorMoved = "default";
 
-      # GPG signing configuration
-      user.signingkey = "0x15CBADFE29F2017B";
       commit.gpgsign = true;
       tag.gpgsign = true;
       gpg.program = "gpg";
@@ -93,14 +96,18 @@
       };
     };
 
-    delta = {
-      enable = true;
-      options = {
-        navigate = true;
-        side-by-side = true;
-        line-numbers = true;
-        syntax-theme = "ansi";
-      };
+  };
+
+  # Home Manager 26.05 moved delta out from under programs.git, and no longer
+  # wires it into git implicitly just because it is enabled.
+  programs.delta = {
+    enable = true;
+    enableGitIntegration = true;
+    options = {
+      navigate = true;
+      side-by-side = true;
+      line-numbers = true;
+      syntax-theme = "ansi";
     };
   };
 }
