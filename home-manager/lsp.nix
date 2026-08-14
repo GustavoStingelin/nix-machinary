@@ -17,7 +17,7 @@
     yaml-language-server # YAML LSP
     taplo                # TOML LSP
     bash-language-server # Bash LSP
-    dockerfile-language-server-nodejs  # Dockerfile LSP
+    dockerfile-language-server  # Dockerfile LSP
     terraform-ls         # Terraform LSP
 
     # Formatters
@@ -25,7 +25,7 @@
     rustfmt              # Rust formatter
     gofumpt              # Go formatter
     black                # Python formatter
-    nodePackages.prettier # JS/TS/HTML/CSS formatter
+    prettier             # JS/TS/HTML/CSS formatter
     stylua               # Lua formatter
     shfmt                # Shell script formatter
 
@@ -34,7 +34,7 @@
     clippy               # Rust linter
     golangci-lint        # Go linter
     ruff                 # Python linter/formatter
-    nodePackages.eslint  # JavaScript/TypeScript linter
+    eslint               # JavaScript/TypeScript linter
     shellcheck           # Shell script linter
     typos                # Spell checker
     typos-lsp            # Typos LSP server

@@ -4,6 +4,9 @@
   programs.ghostty = {
     enable = true;
     package = null; # not packaged for aarch64-darwin in nixpkgs; brew cask provides the binary
+    # Home Manager 26.05 added a user service that defaults on; it asserts
+    # against a null package, and there is no binary here for it to launch.
+    systemd.enable = false;
     settings = {
       # Font
       font-size = 14;

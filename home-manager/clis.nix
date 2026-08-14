@@ -16,7 +16,7 @@
       oci-cli
       pkg-config
       qrencode
-      qt6.full
+      qt6.qtbase
       sqlfluff
       torsocks
       tree

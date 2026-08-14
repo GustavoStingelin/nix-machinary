@@ -2,11 +2,11 @@
   description = "Multi-system Nix configuration";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.05";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -16,14 +16,14 @@
     };
 
     catppuccin = {
-      url = "github:catppuccin/nix/release-25.05";
+      url = "github:catppuccin/nix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     flake-utils.url = "github:numtide/flake-utils";
 
     nix-darwin = {
-      url = "github:nix-darwin/nix-darwin/nix-darwin-25.05";
+      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -34,7 +34,7 @@
       overlay-unstable = final: prev:
         let
           unstable = import nixpkgs-unstable {
-          system = prev.system;
+          inherit (prev.stdenv.hostPlatform) system;
           config = prev.config;
           };
         in
@@ -175,7 +175,10 @@
       # Development shell
       devShells.default = pkgs.mkShell {
         buildInputs = [
-          pkgs.go_1_24
+          # Match the Go that buildGoModule uses for packages/zwm.nix, so
+          # `just zwm-check` in the devShell exercises the same toolchain the
+          # packaged build does. nixpkgs 26.05 dropped go_1_24.
+          pkgs.go_1_26
           pkgs.git
           pkgs.nix
           home-manager.packages.${system}.home-manager
@@ -184,7 +187,7 @@
         shellHook = ''
           unset GOROOT
           unset GOBIN
-          export GOCACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/nix-machinary/go-build-1.24.10"
+          export GOCACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/nix-machinary/go-build-1.26.5"
           echo "Nix development environment loaded"
           echo "Available commands:"
           echo "  # NixOS systems:"

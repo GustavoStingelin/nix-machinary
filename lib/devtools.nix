@@ -1,35 +1,8 @@
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 {
-  # NVIDIA drivers
-  hardware.graphics.enable = true;
-  services.xserver.videoDrivers = [
-    "nvidia"
-    "modesetting"
-  ];
-  boot.blacklistedKernelModules = [
-    "nouveau"
-  ];
-  hardware.nvidia = {
-    modesetting.enable = true;
-    powerManagement.enable = false;
-    powerManagement.finegrained = false;
-    open = false;
-    nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
-    prime = {
-      offload = {
-        enable = true;
-        enableOffloadCmd = true;
-      };
-      intelBusId = "PCI:0:2:0";
-      nvidiaBusId = "PCI:1:0:0";
-    };
-  };
-  environment.variables = {
-    NVD_BACKEND = "direct";
-    LIBVA_DRIVER_NAME = "nvidia";
-    GI_TYPELIB_PATH = "/run/current-system/sw/lib/girepository-1.0";
-  };
+  # NVIDIA lives in hosts/reapermobile: `prime` needs that laptop's PCI bus IDs,
+  # so it can't be shared. nixpkgs 26.05 makes hardware.nvidia.package a unique
+  # option, which turned the copy that used to sit here into an eval error.
 
   #virtual box settings
    virtualisation.virtualbox.host.enable = true;
@@ -103,7 +76,6 @@
   	libxslt
   	appimage-run
   	wget
-  	wavm
   	curl
   	btop-cuda
   	htop
@@ -126,10 +98,10 @@
   	localsend
   	sparrow
   	bitcoin
-  	protonvpn-gui
+  	proton-vpn
   	gnupg
   	dig
-  	neofetch
+  	fastfetch
   	discord
   	vlc
     ripgrep
