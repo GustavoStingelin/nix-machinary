@@ -3,6 +3,7 @@
 {
   imports = [
     ./brew.nix
+    ./k3s-dns.nix
     home-manager.darwinModules.home-manager
   ];
 
