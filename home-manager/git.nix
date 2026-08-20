@@ -76,6 +76,16 @@
       init.defaultBranch = "main";
       core.editor = "hx";
 
+      # Signature status in the log. `%G?` is a single letter: G good, U good but
+      # the key is not ultimately trusted, N unsigned, B bad, E unverifiable.
+      # `sig` replaces the default `medium` format, `sigline` is the --oneline
+      # equivalent behind the `sl` alias.
+      pretty = {
+        sig = "format:%C(auto)commit %H%d%C(reset)%nSignature: %C(auto)%G?%C(reset) %GS%nAuthor:    %an <%ae>%nDate:      %ad%n%n%w(0,4,4)%B";
+        sigline = "format:%C(auto)%h %G?%d%C(reset) %s %C(dim)(%ar)%C(reset)";
+      };
+      format.pretty = "sig";
+
       # Delta pager options (core.pager and interactive.diffFilter are set automatically by programs.delta)
       merge.conflictstyle = "diff3";
       diff.colorMoved = "default";
@@ -93,6 +103,7 @@
         co = "checkout";
         st = "status";
         last = "log -1 HEAD";
+        sl = "log --pretty=sigline";
       };
     };
 
