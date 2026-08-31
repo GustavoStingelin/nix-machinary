@@ -27,7 +27,13 @@
       "arc"
       "bitwarden"
       "brave-browser"
-      "claude-code"
+      # Upstream publishes two release channels, and the plain "claude-code"
+      # cask follows the slower one: its livecheck reads .../releases/stable,
+      # which trails .../releases/latest by a couple of weeks' worth of
+      # versions. The @latest cask is the same binary from the same CDN, built
+      # off the latest channel instead. The two conflict with each other, so
+      # this is a swap, not an addition.
+      "claude-code@latest"
       "codex"
       "dbeaver-community"
       "flameshot"
