@@ -78,6 +78,7 @@
         ./home-manager/atuin.nix
         ./home-manager/gpg.nix
         ./home-manager/gh.nix
+        ./home-manager/ssh.nix
         ./home-manager/clis.nix
         ./home-manager/tuis.nix
         ./home-manager/zellij.nix
