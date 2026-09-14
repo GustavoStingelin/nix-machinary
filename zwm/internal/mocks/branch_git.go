@@ -182,6 +182,69 @@ func (_c *MockBranchGit_AddNewWorktree_Call) RunAndReturn(run func(context1 cont
 	return _c
 }
 
+// DeleteBranch provides a mock function for the type MockBranchGit
+func (_mock *MockBranchGit) DeleteBranch(context1 context.Context, directory git.Directory, branch git.Branch) error {
+	ret := _mock.Called(context1, directory, branch)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteBranch")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, git.Directory, git.Branch) error); ok {
+		r0 = returnFunc(context1, directory, branch)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBranchGit_DeleteBranch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBranch'
+type MockBranchGit_DeleteBranch_Call struct {
+	*mock.Call
+}
+
+// DeleteBranch is a helper method to define mock.On call
+//   - context1 context.Context
+//   - directory git.Directory
+//   - branch git.Branch
+func (_e *MockBranchGit_Expecter) DeleteBranch(context1 interface{}, directory interface{}, branch interface{}) *MockBranchGit_DeleteBranch_Call {
+	return &MockBranchGit_DeleteBranch_Call{Call: _e.mock.On("DeleteBranch", context1, directory, branch)}
+}
+
+func (_c *MockBranchGit_DeleteBranch_Call) Run(run func(context1 context.Context, directory git.Directory, branch git.Branch)) *MockBranchGit_DeleteBranch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 git.Directory
+		if args[1] != nil {
+			arg1 = args[1].(git.Directory)
+		}
+		var arg2 git.Branch
+		if args[2] != nil {
+			arg2 = args[2].(git.Branch)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBranchGit_DeleteBranch_Call) Return(err error) *MockBranchGit_DeleteBranch_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBranchGit_DeleteBranch_Call) RunAndReturn(run func(context1 context.Context, directory git.Directory, branch git.Branch) error) *MockBranchGit_DeleteBranch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListWorktrees provides a mock function for the type MockBranchGit
 func (_mock *MockBranchGit) ListWorktrees(context1 context.Context, directory git.Directory) ([]byte, error) {
 	ret := _mock.Called(context1, directory)
@@ -318,6 +381,69 @@ func (_c *MockBranchGit_LocalBranchExists_Call) Return(b bool, err error) *MockB
 }
 
 func (_c *MockBranchGit_LocalBranchExists_Call) RunAndReturn(run func(context1 context.Context, directory git.Directory, branch git.Branch) (bool, error)) *MockBranchGit_LocalBranchExists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RemoveWorktree provides a mock function for the type MockBranchGit
+func (_mock *MockBranchGit) RemoveWorktree(context1 context.Context, directory git.Directory, worktreePath git.WorktreePath) error {
+	ret := _mock.Called(context1, directory, worktreePath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveWorktree")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, git.Directory, git.WorktreePath) error); ok {
+		r0 = returnFunc(context1, directory, worktreePath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBranchGit_RemoveWorktree_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveWorktree'
+type MockBranchGit_RemoveWorktree_Call struct {
+	*mock.Call
+}
+
+// RemoveWorktree is a helper method to define mock.On call
+//   - context1 context.Context
+//   - directory git.Directory
+//   - worktreePath git.WorktreePath
+func (_e *MockBranchGit_Expecter) RemoveWorktree(context1 interface{}, directory interface{}, worktreePath interface{}) *MockBranchGit_RemoveWorktree_Call {
+	return &MockBranchGit_RemoveWorktree_Call{Call: _e.mock.On("RemoveWorktree", context1, directory, worktreePath)}
+}
+
+func (_c *MockBranchGit_RemoveWorktree_Call) Run(run func(context1 context.Context, directory git.Directory, worktreePath git.WorktreePath)) *MockBranchGit_RemoveWorktree_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 git.Directory
+		if args[1] != nil {
+			arg1 = args[1].(git.Directory)
+		}
+		var arg2 git.WorktreePath
+		if args[2] != nil {
+			arg2 = args[2].(git.WorktreePath)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBranchGit_RemoveWorktree_Call) Return(err error) *MockBranchGit_RemoveWorktree_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBranchGit_RemoveWorktree_Call) RunAndReturn(run func(context1 context.Context, directory git.Directory, worktreePath git.WorktreePath) error) *MockBranchGit_RemoveWorktree_Call {
 	_c.Call.Return(run)
 	return _c
 }

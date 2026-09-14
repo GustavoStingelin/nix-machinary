@@ -24,8 +24,8 @@ func NewSystemTUI() cli.TUIRunner {
 	config := zellij.Config{Runner: zellij.SystemRunner{}, Environment: zellij.SystemEnvironment{}}
 	store := agentstate.NewStore(agentstate.Dir(os.LookupEnv))
 	current, _ := zellij.CurrentSession(config)
-	// The recent list needs the same project resolver and git client the commands
-	// use, so its keys and branches match the tab titles they produce.
+	// The worktree list needs the same project resolver and git client the
+	// commands use, so its keys and branches match the tab titles they produce.
 	gitClient := git.NewClient(git.Config{})
 	home, _ := os.LookupEnv("HOME")
 	return tui.NewRunner(
@@ -48,7 +48,7 @@ func NewSystemTUI() cli.TUIRunner {
 // the wco/o/wpr subcommands (which create/focus the tab themselves).
 type tuiCommander struct {
 	completer cli.Completer
-	service   cli.Service
+	service   Service
 	review    reviewLauncher
 }
 
@@ -88,6 +88,15 @@ func (commander tuiCommander) BrowsePullRequest(ctx context.Context, repository,
 	return commander.review.Browse(ctx, repository, selector)
 }
 
+func (commander tuiCommander) RemoveWorktree(ctx context.Context, project, worktreePath string, deleteBranch bool) error {
+	_, err := commander.service.RemoveWorktree(ctx, project, worktreePath, deleteBranch)
+	return err
+}
+
+func (commander tuiCommander) OpenWorktree(ctx context.Context, worktreePath, title string) error {
+	return commander.service.OpenWorktree(ctx, worktreePath, title)
+}
+
 func (commander tuiCommander) run(ctx context.Context, project string, action cli.Action) error {
 	_, err := commander.service.Execute(ctx, cli.Invocation{
 		Project: cli.ProjectNameOrPath(project),
@@ -102,8 +111,8 @@ type tuiSource struct {
 	config  zellij.Config
 	store   *agentstate.Store
 	reviews reviewSource
-	// The recent-worktree list resolves each project under the code root and asks
-	// Git for its worktrees; see recent.go.
+	// The worktree list resolves each project under the code root and asks Git
+	// for its worktrees; see worktrees.go.
 	projects project.Resolver
 	git      git.Client
 	home     string

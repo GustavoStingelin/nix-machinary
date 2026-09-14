@@ -17,6 +17,7 @@ type uiMode int
 const (
 	modeTree uiMode = iota
 	modePicker
+	modeConfirm
 )
 
 type pickerKind int

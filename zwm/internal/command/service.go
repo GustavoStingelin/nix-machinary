@@ -10,6 +10,7 @@ import (
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/git"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/github"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/project"
+	"github.com/GustavoStingelin/nix-machinary/zwm/internal/worktree"
 	"github.com/GustavoStingelin/nix-machinary/zwm/internal/zellij"
 )
 
@@ -48,19 +49,7 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 	if err := zellij.Preflight(ctx, service.preflight); err != nil {
 		return nil, err
 	}
-	home, present := service.env.Lookup(zellij.EnvironmentHome)
-	if !present || home == "" {
-		return nil, errs.New(errs.Preflight, "HOME is not available")
-	}
-	workingDirectory, err := os.Getwd()
-	if err != nil {
-		return nil, errs.Wrap(errs.External, "determine working directory", err)
-	}
-	resolution, err := service.projects.Resolve(ctx, project.Request{
-		Home:             project.Directory(home),
-		Project:          project.Value(invocation.Project),
-		WorkingDirectory: project.Directory(workingDirectory),
-	})
+	resolution, err := service.resolve(ctx, invocation.Project)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +114,54 @@ func (service Service) Execute(ctx context.Context, invocation cli.Invocation) (
 	default:
 		return nil, errs.New(errs.External, "unsupported CLI action")
 	}
+}
+
+// RemoveWorktree deletes one of a project's worktrees, and its branch when
+// deleteBranch is set. It is reached from the dashboard rather than the CLI
+// grammar, and it opens no tab, so unlike Execute it runs no Zellij preflight.
+func (service Service) RemoveWorktree(ctx context.Context, selected, worktreePath string, deleteBranch bool) (app.RemoveWorktreeResult, error) {
+	resolution, err := service.resolve(ctx, cli.ProjectNameOrPath(selected))
+	if err != nil {
+		return app.RemoveWorktreeResult{}, err
+	}
+	return service.branches.RemoveWorktree(ctx, app.RemoveWorktreeInput{
+		Project:      resolution,
+		Worktree:     worktree.Path(worktreePath),
+		DeleteBranch: deleteBranch,
+	})
+}
+
+// OpenWorktree puts a tab in an existing worktree's directory. It creates
+// nothing in Git and the dashboard already knows the path, so unlike the
+// checkout commands it resolves no project — but it does open a tab, so it keeps
+// the Zellij preflight.
+func (service Service) OpenWorktree(ctx context.Context, worktreePath, title string) error {
+	if err := zellij.Preflight(ctx, service.preflight); err != nil {
+		return err
+	}
+	_, err := service.tabs.Launch(ctx, zellij.Input{
+		Title: zellij.TabTitle(title),
+		Cwd:   zellij.Directory(worktreePath),
+	})
+	return err
+}
+
+// resolve turns the optionally selected project into a canonical resolution,
+// against HOME and the process's working directory.
+func (service Service) resolve(ctx context.Context, selected cli.ProjectNameOrPath) (project.Resolution, error) {
+	home, present := service.env.Lookup(zellij.EnvironmentHome)
+	if !present || home == "" {
+		return project.Resolution{}, errs.New(errs.Preflight, "HOME is not available")
+	}
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		return project.Resolution{}, errs.Wrap(errs.External, "determine working directory", err)
+	}
+	return service.projects.Resolve(ctx, project.Request{
+		Home:             project.Directory(home),
+		Project:          project.Value(selected),
+		WorkingDirectory: project.Directory(workingDirectory),
+	})
 }
 
 func branchResult(result app.CheckoutResult) cli.WorktreeResult {

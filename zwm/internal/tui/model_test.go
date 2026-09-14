@@ -12,16 +12,16 @@ import (
 )
 
 type fakeSource struct {
-	sessions  []SessionView
-	tabs      map[string][]TabView
-	agents    map[string][]AgentView
-	reviews   []ReviewView
-	reviewErr error
-	recents   []RecentView
-	recentErr error
-	cached    []ReviewView
-	cachedAt  time.Time
-	cachedOK  bool
+	sessions    []SessionView
+	tabs        map[string][]TabView
+	agents      map[string][]AgentView
+	reviews     []ReviewView
+	reviewErr   error
+	worktrees   []WorktreeView
+	worktreeErr error
+	cached      []ReviewView
+	cachedAt    time.Time
+	cachedOK    bool
 	// tabCalls, when set, records every session whose tabs were queried, in
 	// order. It is a pointer so the value receivers below can still append.
 	tabCalls *[]string
@@ -68,8 +68,8 @@ func (source fakeSource) Agents(_ context.Context, session string, liveTabs []Ta
 
 // Recent answers from a fixed list; the model decides what Enter does with each
 // row, which is what the tests below exercise.
-func (source fakeSource) Recent(context.Context) ([]RecentView, error) {
-	return source.recents, source.recentErr
+func (source fakeSource) Worktrees(context.Context) ([]WorktreeView, error) {
+	return source.worktrees, source.worktreeErr
 }
 
 type jumpCall struct{ session, tab, paneID string }
@@ -88,6 +88,8 @@ type commandCall struct {
 	op, project, arg string
 	repository       string
 	force            bool
+	// branch marks a worktree removal that was asked to delete the branch too.
+	branch bool
 }
 
 type fakeCommander struct {
@@ -129,6 +131,14 @@ func (commander *fakeCommander) ReviewPullRequest(_ context.Context, project, re
 }
 func (commander *fakeCommander) BrowsePullRequest(_ context.Context, repository, selector string) error {
 	commander.calls = append(commander.calls, commandCall{op: "browse", repository: repository, arg: selector})
+	return commander.err
+}
+func (commander *fakeCommander) OpenWorktree(_ context.Context, worktree, title string) error {
+	commander.calls = append(commander.calls, commandCall{op: "open-worktree", project: title, arg: worktree})
+	return commander.err
+}
+func (commander *fakeCommander) RemoveWorktree(_ context.Context, project, worktree string, deleteBranch bool) error {
+	commander.calls = append(commander.calls, commandCall{op: "rm", project: project, arg: worktree, branch: deleteBranch})
 	return commander.err
 }
 
@@ -975,20 +985,23 @@ func TestHumanAge_reads_the_way_a_person_would_say_it(t *testing.T) {
 	require.Equal(t, "2d ago", humanAge(50*time.Hour))
 }
 
-// --- recent tabs ---
+// --- worktrees ---
 
-// recentModel builds a dashboard whose current session ("bitcoin") has one open
-// tab, plus three managed worktrees: one whose tab is that open one, one closed
-// branch worktree, and one closed pull-request worktree.
-func recentModel(t *testing.T) (*model, *fakeJumper, *fakeCommander) {
+// worktreeModel builds a dashboard whose current session ("bitcoin") has one
+// open tab, plus one worktree of every kind: a managed branch worktree whose tab
+// is that open one, a closed managed branch worktree, a closed pull-request
+// worktree, a repository root, and one made by hand outside the managed root.
+func worktreeModel(t *testing.T) (*model, *fakeJumper, *fakeCommander) {
 	t.Helper()
 	source := fakeSource{
 		sessions: []SessionView{{Name: "bitcoin", Current: true}},
 		tabs:     map[string][]TabView{"bitcoin": {{Title: "btcwallet:live"}}},
-		recents: []RecentView{
+		worktrees: []WorktreeView{
 			{Project: "btcwallet", Branch: "live", Title: "btcwallet:live", Worktree: "/wt/live"},
 			{Project: "btcwallet", Branch: "itests/accounts", Title: "btcwallet:itests/accounts", Worktree: "/wt/itests-accounts"},
-			{Project: "btcwallet", PullRequest: "1313", IsPullRequest: true, Title: "btcwallet:pr-1313", Worktree: "/wt/pr-1313"},
+			{Project: "btcwallet", Branch: "zwm/pr-1313-ab12cd34", Kind: WorktreePullRequest, PullRequest: "1313", Title: "btcwallet:pr-1313", Worktree: "/wt/pr-1313"},
+			{Project: "btcwallet", Kind: WorktreePrimary, Title: "btcwallet", Worktree: "/code/btcwallet"},
+			{Project: "lnd", Branch: "feature", Kind: WorktreeExternal, Title: "lnd:feature", Worktree: "/tmp/by-hand"},
 		},
 	}
 	jumper := &fakeJumper{}
@@ -996,38 +1009,43 @@ func recentModel(t *testing.T) (*model, *fakeJumper, *fakeCommander) {
 	m := newModel(context.Background(), source, jumper, commander, "bitcoin")
 	_, cmd := m.Update(sessionsLoadedMsg{sessions: source.sessions})
 	runBatch(t, m, cmd)
-	send(t, m, recentsLoadedMsg{recents: source.recents})
+	send(t, m, worktreesLoadedMsg{worktrees: source.worktrees})
+	// Worktrees live in their own pane, which is where every test below acts.
+	m.switchPane(paneWorktrees)
 	return m, jumper, commander
 }
 
-func focusRecent(t *testing.T, m *model, title string) {
+func focusWorktree(t *testing.T, m *model, title string) {
 	t.Helper()
 	for i, row := range m.rows {
-		if row.kind == selRecent && m.recents[row.recent].Title == title {
+		if row.kind == selWorktree && m.worktrees[row.worktree].Title == title {
 			m.cursor = i
 			return
 		}
 	}
-	t.Fatalf("recent row %q not among rows", title)
+	t.Fatalf("worktree row %q not among rows", title)
 }
 
-func TestRecent_lists_managed_worktrees_with_their_age(t *testing.T) {
-	m, _, _ := recentModel(t)
-	m.recents[1].TouchedAt = m.now().Add(-50 * time.Hour)
+func TestWorktrees_lists_every_worktree_with_its_age(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.worktrees[1].TouchedAt = m.now().Add(-50 * time.Hour)
 	m.rebuildRows()
 
 	view := m.View()
-	require.Contains(t, view, "recent tabs")
 	require.Contains(t, view, "btcwallet:itests/accounts")
 	require.Contains(t, view, "2d ago")
 	// The worktree whose tab is open says so instead of an age, because Enter
 	// jumps to it rather than checking anything out.
 	require.Contains(t, view, "open")
+	// The two kinds no wco reopens are called out, and rows are grouped by project.
+	require.Contains(t, view, "root")
+	require.Contains(t, view, "external")
+	require.Contains(t, view, "─── lnd ───")
 }
 
-func TestRecent_enter_jumps_when_the_tab_is_already_open(t *testing.T) {
-	m, jumper, commander := recentModel(t)
-	focusRecent(t, m, "btcwallet:live")
+func TestWorktrees_enter_jumps_when_the_tab_is_already_open(t *testing.T) {
+	m, jumper, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:live")
 
 	send(t, m, key("enter"))
 
@@ -1035,9 +1053,9 @@ func TestRecent_enter_jumps_when_the_tab_is_already_open(t *testing.T) {
 	require.Empty(t, commander.calls, "an open tab must not be checked out again")
 }
 
-func TestRecent_enter_reopens_a_closed_branch_worktree_with_wco(t *testing.T) {
-	m, jumper, commander := recentModel(t)
-	focusRecent(t, m, "btcwallet:itests/accounts")
+func TestWorktrees_enter_reopens_a_closed_branch_worktree_with_wco(t *testing.T) {
+	m, jumper, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:itests/accounts")
 
 	_, cmd := m.Update(key("enter"))
 	require.NotNil(t, cmd)
@@ -1050,9 +1068,9 @@ func TestRecent_enter_reopens_a_closed_branch_worktree_with_wco(t *testing.T) {
 // A pull-request worktree's branch is "zwm/pr-<n>-<hash>" while its tab is
 // "<project>:pr-<n>", so reopening has to go back through wpr — a wco of that
 // branch would title the tab after the raw branch instead.
-func TestRecent_enter_reopens_a_pull_request_worktree_with_wpr_and_never_forces(t *testing.T) {
-	m, _, commander := recentModel(t)
-	focusRecent(t, m, "btcwallet:pr-1313")
+func TestWorktrees_enter_reopens_a_pull_request_worktree_with_wpr_and_never_forces(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:pr-1313")
 
 	_, cmd := m.Update(key("enter"))
 	require.NotNil(t, cmd)
@@ -1061,27 +1079,212 @@ func TestRecent_enter_reopens_a_pull_request_worktree_with_wpr_and_never_forces(
 	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1313", force: false}}, commander.calls)
 }
 
-func TestRecent_section_is_absent_when_there_are_no_managed_worktrees(t *testing.T) {
-	m, _, _ := recentModel(t)
-	m.recents = nil
+// The repository root is a project, not a branch worktree, so it reopens the way
+// `o` does.
+func TestWorktrees_enter_reopens_the_primary_worktree_as_the_project(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet")
+
+	_, cmd := m.Update(key("enter"))
+	require.NotNil(t, cmd)
+	cmd()
+
+	require.Equal(t, []commandCall{{op: "open", project: "btcwallet"}}, commander.calls)
+}
+
+// No wco/wpr describes a worktree zwm did not create — wco would refuse its
+// branch as already checked out — so it opens at its own path instead.
+func TestWorktrees_enter_opens_an_external_worktree_at_its_own_path(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "lnd:feature")
+
+	_, cmd := m.Update(key("enter"))
+	require.NotNil(t, cmd)
+	cmd()
+
+	require.Equal(t, []commandCall{{op: "open-worktree", project: "lnd:feature", arg: "/tmp/by-hand"}}, commander.calls)
+}
+
+func TestWorktrees_pane_says_so_when_there_are_none(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.worktrees = nil
 	m.rebuildRows()
 
-	require.NotContains(t, m.View(), "recent tabs")
+	require.Contains(t, m.View(), "(no worktrees)")
+	require.Empty(t, m.rows)
+}
+
+// --- panes ---
+
+func TestPanes_worktrees_are_absent_from_the_dashboard_pane(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.switchPane(paneDashboard)
+
+	require.NotContains(t, m.View(), "btcwallet:itests/accounts")
 	for _, row := range m.rows {
-		require.NotEqual(t, selRecent, row.kind)
+		require.NotEqual(t, selWorktree, row.kind)
 	}
 }
 
-func TestRecent_tab_cycles_into_the_section(t *testing.T) {
-	m, _, _ := recentModel(t)
-	// From the tree, Tab must reach the recent section rather than skipping it.
-	found := false
-	for range 4 {
-		m.cycleSection(1)
-		if row, ok := m.currentRow(); ok && row.kind == selRecent {
-			found = true
-			break
-		}
-	}
-	require.True(t, found, "tab never landed on the recent section")
+func TestPanes_bracket_keys_cycle_between_the_two_panes(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.switchPane(paneDashboard)
+
+	send(t, m, key("]"))
+	require.Equal(t, paneWorktrees, m.activePane)
+
+	send(t, m, key("]"))
+	require.Equal(t, paneDashboard, m.activePane, "two panes, so ] wraps")
+
+	send(t, m, key("["))
+	require.Equal(t, paneWorktrees, m.activePane)
+}
+
+func TestPanes_number_keys_select_a_pane_directly(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	send(t, m, key("1"))
+	require.Equal(t, paneDashboard, m.activePane)
+
+	send(t, m, key("2"))
+	require.Equal(t, paneWorktrees, m.activePane)
+}
+
+// The panes list unrelated things, so a carried-over index would land somewhere
+// arbitrary.
+func TestPanes_switching_resets_the_cursor(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	focusWorktree(t, m, "lnd:feature")
+	require.NotZero(t, m.cursor)
+
+	m.switchPane(paneDashboard)
+
+	require.Zero(t, m.cursor)
+}
+
+func TestPanes_the_bar_marks_the_active_pane(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	require.Contains(t, m.View(), "1 dashboard")
+	require.Contains(t, m.View(), "2 worktrees")
+}
+
+// --- deleting a worktree ---
+
+func TestWorktreeDelete_d_asks_before_deleting_and_names_the_worktree_and_branch(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:pr-1313")
+
+	send(t, m, key("d"))
+
+	view := m.View()
+	require.Contains(t, view, "delete worktree")
+	require.Contains(t, view, "/wt/pr-1313")
+	require.Contains(t, view, "zwm/pr-1313-ab12cd34")
+	require.Empty(t, commander.calls, "the prompt must not delete anything on its own")
+}
+
+func TestWorktreeDelete_y_removes_the_worktree_and_keeps_the_branch(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:itests/accounts")
+	send(t, m, key("d"))
+
+	_, cmd := m.Update(key("y"))
+	require.NotNil(t, cmd)
+	msg := cmd()
+	require.IsType(t, worktreeRemovedMsg{}, msg)
+	m.Update(msg)
+
+	require.Equal(t, []commandCall{{op: "rm", project: "btcwallet", arg: "/wt/itests-accounts"}}, commander.calls)
+	require.Equal(t, modeTree, m.mode)
+	require.Contains(t, m.status, "deleted btcwallet:itests/accounts")
+}
+
+func TestWorktreeDelete_b_also_deletes_the_branch(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:pr-1313")
+	send(t, m, key("d"))
+
+	_, cmd := m.Update(key("b"))
+	require.NotNil(t, cmd)
+	m.Update(cmd())
+
+	require.Equal(t, []commandCall{{op: "rm", project: "btcwallet", arg: "/wt/pr-1313", branch: true}}, commander.calls)
+	require.Contains(t, m.status, "branch zwm/pr-1313-ab12cd34")
+}
+
+// Anything but the two deliberate keys backs out, which is the safe default for
+// a prompt whose other answers delete.
+func TestWorktreeDelete_any_other_key_cancels(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:itests/accounts")
+	send(t, m, key("d"))
+
+	send(t, m, key("n"))
+
+	require.Equal(t, modeTree, m.mode)
+	require.Empty(t, commander.calls)
+}
+
+// The worktree directory is the working directory of whatever runs in that tab,
+// and Git would delete it out from under a live shell.
+func TestWorktreeDelete_refuses_a_worktree_whose_tab_is_open(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:live")
+
+	send(t, m, key("d"))
+
+	require.Equal(t, modeTree, m.mode)
+	require.Empty(t, commander.calls)
+	require.Contains(t, m.status, "close the tab first")
+}
+
+// A branch deletion can fail after the worktree is already gone, so the list has
+// to be reloaded even when the command reports an error.
+func TestWorktreeDelete_reports_a_failure_and_still_reloads_the_list(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	commander.err = errors.New("git worktree remove: contains modified files")
+	focusWorktree(t, m, "btcwallet:itests/accounts")
+	send(t, m, key("d"))
+
+	_, cmd := m.Update(key("y"))
+	_, reload := m.Update(cmd())
+
+	require.Contains(t, m.status, "contains modified files")
+	require.NotNil(t, reload, "the worktree list must be reloaded after a failed delete")
+	require.IsType(t, worktreesLoadedMsg{}, reload())
+}
+
+func TestWorktreeDelete_footer_advertises_the_key(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet:itests/accounts")
+
+	require.Contains(t, m.View(), "d delete")
+}
+
+// The repository root is refused before the prompt: deleting it would take every
+// other worktree's backing store with it.
+func TestWorktreeDelete_refuses_the_primary_worktree(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "btcwallet")
+
+	send(t, m, key("d"))
+
+	require.Equal(t, modeTree, m.mode)
+	require.Empty(t, commander.calls)
+	require.Contains(t, m.status, "cannot be deleted")
+}
+
+// A worktree zwm did not create is exactly the kind that accumulates, so it is
+// deletable like any other.
+func TestWorktreeDelete_deletes_an_external_worktree(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	focusWorktree(t, m, "lnd:feature")
+	send(t, m, key("d"))
+
+	_, cmd := m.Update(key("y"))
+	require.NotNil(t, cmd)
+	m.Update(cmd())
+
+	require.Equal(t, []commandCall{{op: "rm", project: "lnd", arg: "/tmp/by-hand"}}, commander.calls)
 }

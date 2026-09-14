@@ -16,6 +16,8 @@ type BranchGit interface {
 	ListWorktrees(context.Context, git.Directory) ([]byte, error)
 	AddExistingWorktree(context.Context, git.Directory, git.WorktreePath, git.Branch) error
 	AddNewWorktree(context.Context, git.Directory, git.Branch, git.WorktreePath, git.Commit) error
+	RemoveWorktree(context.Context, git.Directory, git.WorktreePath) error
+	DeleteBranch(context.Context, git.Directory, git.Branch) error
 }
 
 type TabLauncher interface {

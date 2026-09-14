@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -189,4 +190,27 @@ func classifyBranch(input TargetInput) BranchState {
 	default:
 		return BranchDuplicate
 	}
+}
+
+// UnderManagedRoot reports whether path sits strictly inside root. Both come
+// from the same resolver and Git, so a plain prefix test on a separator-
+// terminated root is enough; no cleaning is attempted, because a path that needs
+// it is not a path this produced.
+func UnderManagedRoot(path, root Path) bool {
+	if root == "" || len(path) <= len(root) {
+		return false
+	}
+	return path[:len(root)] == root && path[len(root)] == os.PathSeparator
+}
+
+// LocalBranch recovers the branch name from a local ref. The second result is
+// false for anything else, so callers skip such a record rather than guess at
+// what it points to.
+func LocalBranch(ref Ref) (Branch, bool) {
+	const prefix = "refs/heads/"
+	value := string(ref)
+	if len(value) <= len(prefix) || value[:len(prefix)] != prefix {
+		return "", false
+	}
+	return Branch(value[len(prefix):]), true
 }

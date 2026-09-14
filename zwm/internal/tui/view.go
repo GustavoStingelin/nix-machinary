@@ -15,6 +15,9 @@ func (m *model) View() string {
 	if m.mode == modePicker {
 		return m.pickerView()
 	}
+	if m.mode == modeConfirm {
+		return m.confirmView()
+	}
 	if !m.ready {
 		return "\n  loading sessions…\n"
 	}
@@ -23,7 +26,7 @@ func (m *model) View() string {
 	body := m.window(lines)
 
 	var out strings.Builder
-	out.WriteString(titleStyle.Render("zwm"))
+	out.WriteString(m.paneBar())
 	out.WriteByte('\n')
 	for _, line := range body {
 		out.WriteString(line)
@@ -33,9 +36,27 @@ func (m *model) View() string {
 	return out.String()
 }
 
-// displayLines flattens the session tree into rendered rows, tracking which map
+// paneBar names the two panes and marks the active one, so the keys that switch
+// them are visible rather than something you have to know.
+func (m *model) paneBar() string {
+	labels := []string{"1 dashboard", "2 worktrees"}
+	rendered := make([]string, 0, len(labels))
+	for index, label := range labels {
+		if pane(index) == m.activePane {
+			rendered = append(rendered, titleStyle.Render(label))
+			continue
+		}
+		rendered = append(rendered, dimStyle.Render(label))
+	}
+	return titleStyle.Render("zwm") + "  " + strings.Join(rendered, dimStyle.Render(" │ "))
+}
+
+// displayLines flattens the active pane into rendered rows, tracking which map
 // back to navigable selections so the cursor and scrolling can be resolved.
 func (m *model) displayLines() []displayLine {
+	if m.activePane == paneWorktrees {
+		return m.worktreeLines()
+	}
 	lines := make([]displayLine, 0)
 	row := 0
 
@@ -64,19 +85,6 @@ func (m *model) displayLines() []displayLine {
 		for _, review := range m.reviews {
 			selected := m.cursor == row
 			lines = append(lines, displayLine{text: renderReview(review, width, selected), row: row})
-			row++
-		}
-	}
-	// Recent worktrees: a way back into a tab that has been closed, between the
-	// review queue and the tree because it is also a list of things to reopen
-	// rather than live state. Suppressed entirely when there is nothing to show,
-	// so a machine with no managed worktrees carries no empty section.
-	if m.recentsLoaded && len(m.recents) > 0 {
-		lines = append(lines, displayLine{text: dimStyle.Render("─── recent tabs ───"), row: -1})
-		for _, entry := range m.recents {
-			selected := m.cursor == row
-			open := m.tabIsOpenInCurrentSession(entry.Title)
-			lines = append(lines, displayLine{text: renderRecent(entry, open, m.now(), selected), row: row})
 			row++
 		}
 	}
@@ -109,6 +117,29 @@ func (m *model) displayLines() []displayLine {
 		if len(session.tabs) == 0 {
 			lines = append(lines, displayLine{text: dimStyle.Render("      (no tabs)"), row: -1})
 		}
+	}
+	return lines
+}
+
+// worktreeLines renders the worktrees pane, grouped under a heading per project
+// so a machine with several checkouts reads as a list of projects rather than
+// one flat run of similar-looking paths.
+func (m *model) worktreeLines() []displayLine {
+	lines := make([]displayLine, 0, len(m.worktrees)+4)
+	if !m.worktreesLoaded {
+		return append(lines, displayLine{text: dimStyle.Render("  loading…"), row: -1})
+	}
+	if len(m.worktrees) == 0 {
+		return append(lines, displayLine{text: dimStyle.Render("  (no worktrees)"), row: -1})
+	}
+	project := ""
+	for row, entry := range m.worktrees {
+		if entry.Project != project {
+			project = entry.Project
+			lines = append(lines, displayLine{text: dimStyle.Render("─── " + project + " ───"), row: -1})
+		}
+		open := m.tabIsOpenInCurrentSession(entry.Title)
+		lines = append(lines, displayLine{text: renderWorktree(entry, open, m.now(), m.cursor == row), row: row})
 	}
 	return lines
 }
@@ -299,20 +330,37 @@ func renderReview(review ReviewView, numberWidth int, selected bool) string {
 	return line + "  " + review.Title
 }
 
-// renderRecent renders one recent-worktree row: the tab it would restore, how
-// long ago it was touched, and — when that tab is already open in this session —
-// an "open" badge, because Enter jumps to it instead of checking anything out.
-func renderRecent(entry RecentView, open bool, now time.Time, selected bool) string {
+// renderWorktree renders one worktree row: the tab it would restore, a badge for
+// the kinds that are not an ordinary managed checkout, and either an "open"
+// badge — because Enter then jumps instead of checking anything out — or how
+// long ago it was touched.
+func renderWorktree(entry WorktreeView, open bool, now time.Time, selected bool) string {
 	line := gutter(selected) + entry.Title
+	if badge := worktreeBadge(entry.Kind); badge != "" {
+		line += "  " + dimStyle.Render(badge)
+	}
 	if open {
 		return line + "  " + doneStyle.Render("open")
 	}
-	return line + "  " + dimStyle.Render(recentAge(entry.TouchedAt, now))
+	return line + "  " + dimStyle.Render(worktreeAge(entry.TouchedAt, now))
 }
 
-// recentAge renders a coarse age: the list only needs to convey "yesterday" from
+// worktreeBadge names the kinds worth calling out: the repository root, which
+// cannot be deleted, and a worktree zwm did not create, which no wco/wpr
+// reopens. A plain managed checkout is the default and carries none.
+func worktreeBadge(kind WorktreeKind) string {
+	switch kind {
+	case WorktreePrimary:
+		return "root"
+	case WorktreeExternal:
+		return "external"
+	}
+	return ""
+}
+
+// worktreeAge renders a coarse age: the list only needs to convey "yesterday" from
 // "last month", and a zero time means the worktree could not be stat'd at all.
-func recentAge(touched, now time.Time) string {
+func worktreeAge(touched, now time.Time) string {
 	if touched.IsZero() {
 		return "?"
 	}
@@ -349,22 +397,22 @@ func (m *model) footer() string {
 	if m.status != "" {
 		return errorStyle.Render(m.status)
 	}
+	if m.activePane == paneWorktrees {
+		verb := "enter open"
+		if row, ok := m.currentRow(); ok && m.tabIsOpenInCurrentSession(m.worktrees[row.worktree].Title) {
+			verb = "enter jump"
+		}
+		return footerStyle.Render("↑/↓ move · " + verb + " · d delete · [ ] pane · r refresh · q quit")
+	}
 	// The review queue rebinds enter and adds two keys, so the hint follows the
 	// cursor rather than listing every binding at once.
 	if row, ok := m.currentRow(); ok {
 		switch row.kind {
 		case selReview:
 			return footerStyle.Render("↑/↓ move · tab section · enter checkout · ctrl+f force · a review agent · b browser · r refresh · q quit")
-		case selRecent:
-			// Enter means two different things here, so name the one this row does.
-			verb := "enter reopen"
-			if m.tabIsOpenInCurrentSession(m.recents[row.recent].Title) {
-				verb = "enter jump"
-			}
-			return footerStyle.Render("↑/↓ move · tab section · " + verb + " · r refresh · q quit")
 		}
 	}
-	return footerStyle.Render("↑/↓ move · tab section · enter jump · o open · w wco · p wpr · r refresh · q quit")
+	return footerStyle.Render("↑/↓ move · tab section · enter jump · o open · w wco · p wpr · [ ] pane · r refresh · q quit")
 }
 
 func gutter(selected bool) string {

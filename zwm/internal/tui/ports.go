@@ -66,23 +66,45 @@ type ReviewView struct {
 	Stale      bool
 }
 
-// RecentView is one managed worktree, offered as a way back into a tab that is
-// no longer open.
+// WorktreeKind says how a worktree is opened, which is the one thing that is not
+// uniform across them.
+type WorktreeKind int
+
+const (
+	// WorktreeManaged is a branch worktree zwm created under the managed root.
+	// `wco <branch>` reopens it. It is first so that it is the zero value: it is
+	// both the common case and the harmless one to fall back to.
+	WorktreeManaged WorktreeKind = iota
+	// WorktreePrimary is the repository root itself. `o <project>` reopens it, and
+	// it is the one worktree that can never be deleted.
+	WorktreePrimary
+	// WorktreePullRequest is a managed worktree created by `wpr`. It reopens by
+	// number, not by branch: its branch is named "zwm/pr-<n>-<hash>" while its tab
+	// is titled "<project>:pr-<n>", so a `wco` of that branch would leave two names
+	// for one worktree.
+	WorktreePullRequest
+	// WorktreeExternal is a worktree made outside zwm, anywhere on disk. No zwm
+	// command owns it — `wco` would refuse its branch as already checked out
+	// elsewhere — so opening it just puts a tab in its directory.
+	WorktreeExternal
+)
+
+// WorktreeView is one of a project's Git worktrees — every one Git reports, not
+// only the ones zwm created — offered both as a way into a tab and as something
+// that can be deleted.
 //
-// Exactly one of Branch and PullRequest is set, because reopening differs: an
-// ordinary worktree comes back through `wco <branch>`, while a pull-request
-// worktree has to go back through `wpr <number>` — its branch is named
-// "zwm/pr-<n>-<hash>" but its tab is titled "<project>:pr-<n>", so checking the
-// branch out directly would leave two names for one worktree. Title is the tab
-// title its command produces, which is also how the dashboard tells whether that
-// tab is already open.
-type RecentView struct {
-	Project       string
-	Branch        string
-	PullRequest   string
-	IsPullRequest bool
-	Title         string
-	Worktree      string
+// Kind decides what opening it means, because the four cases genuinely differ;
+// see WorktreeKind. Branch is the worktree's local branch, set on every kind but
+// the primary, whose branch changes under you and is not what opening it is
+// about. Title is the tab title its command produces, which is also how the
+// dashboard tells whether that tab is already open.
+type WorktreeView struct {
+	Project     string
+	Kind        WorktreeKind
+	Branch      string
+	PullRequest string
+	Title       string
+	Worktree    string
 	// TouchedAt is the worktree directory's modification time, the ordering key.
 	// Zero when it could not be read.
 	TouchedAt time.Time
@@ -101,10 +123,10 @@ type Source interface {
 	// tabs as an argument keeps the caller's one tab query serving both, instead
 	// of costing the Zellij server a second one per refresh.
 	Agents(ctx context.Context, session string, liveTabs []TabView) ([]AgentView, error)
-	// Recent lists managed worktrees, most recently touched first, as ways back
-	// into tabs that have been closed. It runs a Git call per project, so the model
-	// loads it once at startup and on an explicit refresh rather than on the tick.
-	Recent(ctx context.Context) ([]RecentView, error)
+	// Worktrees lists every worktree of every project, most recently touched
+	// first. It runs a Git call per project, so the model loads it once at startup
+	// and on an explicit refresh rather than on the tick.
+	Worktrees(ctx context.Context) ([]WorktreeView, error)
 	// Reviews lists pull requests awaiting the user's review, in any order — the
 	// model sorts them. It is the slowest source (a GitHub search plus a
 	// per-pull-request ref lookup), so the model loads it on its own schedule
@@ -154,4 +176,12 @@ type Commander interface {
 	// BrowsePullRequest opens a pull request on GitHub in the user's browser. It
 	// needs no local checkout, so it works for every row in the review queue.
 	BrowsePullRequest(ctx context.Context, repository, selector string) error
+	// RemoveWorktree deletes a worktree, and its branch when deleteBranch is set.
+	// Unlike the other action methods it opens no tab and the dashboard stays up
+	// afterwards, so it is the one action that does not end the session.
+	RemoveWorktree(ctx context.Context, project, worktree string, deleteBranch bool) error
+	// OpenWorktree puts a tab titled title in an existing worktree's directory. It
+	// is how a worktree zwm did not create is opened, since no wco/wpr invocation
+	// describes one.
+	OpenWorktree(ctx context.Context, worktree, title string) error
 }
