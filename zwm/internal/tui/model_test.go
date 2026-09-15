@@ -152,6 +152,10 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyRight}
 	case "enter":
 		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -1287,4 +1291,194 @@ func TestWorktreeDelete_deletes_an_external_worktree(t *testing.T) {
 	m.Update(cmd())
 
 	require.Equal(t, []commandCall{{op: "rm", project: "lnd", arg: "/tmp/by-hand"}}, commander.calls)
+}
+
+// --- filtering ---
+
+// typeFilter opens the prompt and types text into it, one keystroke at a time,
+// which is also what exercises the narrowing on every keystroke.
+func typeFilter(t *testing.T, m *model, text string) {
+	t.Helper()
+	send(t, m, key("/"))
+	for _, character := range text {
+		send(t, m, key(string(character)))
+	}
+}
+
+func worktreeTitles(m *model) []string {
+	titles := make([]string, 0, len(m.rows))
+	for _, row := range m.rows {
+		titles = append(titles, m.worktrees[row.worktree].Title)
+	}
+	return titles
+}
+
+func TestFilter_narrows_the_list_as_you_type(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "itests")
+
+	require.Equal(t, []string{"btcwallet:itests/accounts"}, worktreeTitles(m))
+	require.Contains(t, m.View(), "btcwallet:itests/accounts")
+	require.NotContains(t, m.View(), "btcwallet:pr-1313")
+}
+
+// The path carries information the title does not, which is the point of
+// searching both.
+func TestFilter_matches_the_worktree_path_as_well_as_the_title(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "by-hand")
+
+	require.Equal(t, []string{"lnd:feature"}, worktreeTitles(m))
+}
+
+func TestFilter_finds_a_pull_request_by_number(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "1313")
+
+	require.Equal(t, []string{"btcwallet:pr-1313"}, worktreeTitles(m))
+}
+
+func TestFilter_ignores_case(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "ITESTS")
+
+	require.Equal(t, []string{"btcwallet:itests/accounts"}, worktreeTitles(m))
+}
+
+func TestFilter_says_so_when_nothing_matches(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "nothing-matches-this")
+
+	require.Empty(t, m.rows)
+	require.Contains(t, m.View(), "(no matches)")
+}
+
+// The count is of what is on screen, so the filter's effect shows even when the
+// matches would have fit unfiltered.
+func TestFilter_bar_counts_matches_against_the_total(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	require.Contains(t, m.View(), "[5]")
+
+	typeFilter(t, m, "itests")
+
+	require.Contains(t, m.View(), "[1/5]")
+}
+
+func TestFilter_backspace_widens_the_list_again(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	typeFilter(t, m, "itestsX")
+	require.Empty(t, m.rows)
+
+	send(t, m, key("backspace"))
+
+	require.Equal(t, []string{"btcwallet:itests/accounts"}, worktreeTitles(m))
+}
+
+// Enter keeps the filter and hands the keys back, because the point of
+// filtering is to act on what is left.
+func TestFilter_enter_keeps_the_filter_and_releases_the_keys(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	typeFilter(t, m, "itests")
+
+	send(t, m, key("enter"))
+	require.False(t, m.filter.active)
+	require.Equal(t, "itests", m.filter.text)
+	require.Equal(t, []string{"btcwallet:itests/accounts"}, worktreeTitles(m))
+
+	// `d` deletes again rather than typing a `d`.
+	send(t, m, key("d"))
+	require.Equal(t, modeConfirm, m.mode)
+	require.Empty(t, commander.calls)
+}
+
+func TestFilter_esc_clears_the_filter(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	typeFilter(t, m, "itests")
+
+	send(t, m, key("esc"))
+
+	require.False(t, m.filter.active)
+	require.Empty(t, m.filter.text)
+	require.Len(t, m.rows, 5)
+}
+
+// Esc after Enter still clears, so the key that dismisses the prompt also undoes
+// what the prompt did.
+func TestFilter_esc_clears_an_accepted_filter_before_it_quits(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	typeFilter(t, m, "itests")
+	send(t, m, key("enter"))
+
+	_, cmd := m.Update(key("esc"))
+
+	require.Nil(t, cmd, "the first esc clears rather than quitting")
+	require.Empty(t, m.filter.text)
+	require.Len(t, m.rows, 5)
+}
+
+// While the prompt is open every letter is text, so the action keys cannot fire
+// behind it.
+func TestFilter_action_keys_are_text_while_the_prompt_is_open(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+
+	typeFilter(t, m, "d")
+
+	require.Equal(t, "d", m.filter.text)
+	require.Equal(t, modeTree, m.mode)
+	require.Empty(t, commander.calls)
+}
+
+// The row indices behind a filtered list are not its positions, so deleting has
+// to reach the entry actually under the cursor.
+func TestFilter_delete_acts_on_the_filtered_row(t *testing.T) {
+	m, _, commander := worktreeModel(t)
+	typeFilter(t, m, "1313")
+	send(t, m, key("enter"))
+	require.Zero(t, m.cursor)
+
+	send(t, m, key("d"))
+	_, cmd := m.Update(key("y"))
+	require.NotNil(t, cmd)
+	m.Update(cmd())
+
+	require.Equal(t, []commandCall{{op: "rm", project: "btcwallet", arg: "/wt/pr-1313"}}, commander.calls)
+}
+
+// Headings come from the rows that survive the filter, not from the full list.
+func TestFilter_project_headings_follow_the_matches(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+
+	typeFilter(t, m, "by-hand")
+
+	view := m.View()
+	require.Contains(t, view, "─── lnd ───")
+	require.NotContains(t, view, "─── btcwallet ───")
+}
+
+func TestFilter_is_dropped_when_the_pane_changes(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	typeFilter(t, m, "itests")
+
+	m.switchPane(paneDashboard)
+	m.switchPane(paneWorktrees)
+
+	require.Empty(t, m.filter.text)
+	require.Len(t, m.rows, 5)
+}
+
+// The dashboard's sections are short and live; narrowing them would hide the
+// state the pane exists to report.
+func TestFilter_is_a_worktrees_pane_key_only(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.switchPane(paneDashboard)
+
+	send(t, m, key("/"))
+
+	require.False(t, m.filter.active)
+	require.NotContains(t, m.View(), "/▏")
 }

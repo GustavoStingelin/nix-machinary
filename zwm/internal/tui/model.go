@@ -175,6 +175,7 @@ type model struct {
 	now              func() time.Time
 
 	activePane pane
+	filter     filter
 	mode       uiMode
 	pick       picker
 	pickerGen  int
@@ -414,8 +415,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.filter.active {
+		return m.handleFilterKey(msg)
+	}
 	switch msg.String() {
-	case "q", "esc", "ctrl+c":
+	case "esc":
+		// Esc clears a filter that is still in force before it quits, so the key
+		// that dismisses the prompt also undoes what the prompt did.
+		if m.filter.text != "" {
+			m.clearFilter()
+			return m, nil
+		}
+		return m, tea.Quit
+	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "up", "k":
 		m.moveCursor(-1)
@@ -465,6 +477,8 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.switchPane(paneDashboard)
 	case "2":
 		return m, m.switchPane(paneWorktrees)
+	case "/":
+		return m, m.beginFilter()
 	}
 	return m, nil
 }
@@ -480,6 +494,7 @@ func (m *model) switchPane(target pane) tea.Cmd {
 	m.cursor = 0
 	m.offset = 0
 	m.status = ""
+	m.filter = filter{}
 	m.rebuildRows()
 	return nil
 }
@@ -938,7 +953,10 @@ func reviewNumber(value string) int {
 func (m *model) rebuildRows() {
 	if m.activePane == paneWorktrees {
 		rows := make([]selection, 0, len(m.worktrees))
-		for worktreeIndex := range m.worktrees {
+		for worktreeIndex, entry := range m.worktrees {
+			if !m.filter.matches(entry) {
+				continue
+			}
 			rows = append(rows, selection{kind: selWorktree, worktree: worktreeIndex})
 		}
 		m.rows = rows

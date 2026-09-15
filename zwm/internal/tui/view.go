@@ -22,12 +22,22 @@ func (m *model) View() string {
 		return "\n  loading sessions…\n"
 	}
 
-	lines := m.displayLines()
-	body := m.window(lines)
+	// The pane bar and the footer always cost a row each, and the spare keeps the
+	// body clear of the terminal's own last line.
+	chrome := 3
+	prompt, promptShown := m.filterPrompt()
+	if promptShown {
+		chrome++
+	}
+	body := m.window(m.displayLines(), chrome)
 
 	var out strings.Builder
 	out.WriteString(m.paneBar())
 	out.WriteByte('\n')
+	if promptShown {
+		out.WriteString(prompt)
+		out.WriteByte('\n')
+	}
 	for _, line := range body {
 		out.WriteString(line)
 		out.WriteByte('\n')
@@ -48,7 +58,17 @@ func (m *model) paneBar() string {
 		}
 		rendered = append(rendered, dimStyle.Render(label))
 	}
-	return titleStyle.Render("zwm") + "  " + strings.Join(rendered, dimStyle.Render(" │ "))
+	bar := titleStyle.Render("zwm") + "  " + strings.Join(rendered, dimStyle.Render(" │ "))
+	if m.activePane != paneWorktrees || !m.worktreesLoaded {
+		return bar
+	}
+	// The count is of what is on screen, so a filter's effect is visible even
+	// when the matches all fit without scrolling.
+	count := fmt.Sprintf("[%d]", len(m.rows))
+	if m.filter.text != "" {
+		count = fmt.Sprintf("[%d/%d]", len(m.rows), len(m.worktrees))
+	}
+	return bar + "  " + dimStyle.Render(count)
 }
 
 // displayLines flattens the active pane into rendered rows, tracking which map
@@ -132,8 +152,14 @@ func (m *model) worktreeLines() []displayLine {
 	if len(m.worktrees) == 0 {
 		return append(lines, displayLine{text: dimStyle.Render("  (no worktrees)"), row: -1})
 	}
+	if len(m.rows) == 0 {
+		return append(lines, displayLine{text: dimStyle.Render("  (no matches)"), row: -1})
+	}
+	// Rows, not m.worktrees: a filter leaves gaps in the latter, and the headings
+	// must follow what survives it.
 	project := ""
-	for row, entry := range m.worktrees {
+	for row, selected := range m.rows {
+		entry := m.worktrees[selected.worktree]
 		if entry.Project != project {
 			project = entry.Project
 			lines = append(lines, displayLine{text: dimStyle.Render("─── " + project + " ───"), row: -1})
@@ -158,8 +184,10 @@ func agentMatchesAnyTab(agent AgentView, tabs []TabView) bool {
 
 // window scrolls the body so the cursor line stays visible, mutating the stored
 // offset. bodyHeight leaves room for the title and footer.
-func (m *model) window(lines []displayLine) []string {
-	bodyHeight := max(m.height-3, 1)
+// window scrolls lines so the cursor stays visible. chrome is how many rows the
+// pane bar, the filter prompt and the footer take, which the body cannot use.
+func (m *model) window(lines []displayLine, chrome int) []string {
+	bodyHeight := max(m.height-chrome, 1)
 	if len(lines) <= bodyHeight {
 		m.offset = 0
 	} else {
@@ -402,7 +430,10 @@ func (m *model) footer() string {
 		if row, ok := m.currentRow(); ok && m.tabIsOpenInCurrentSession(m.worktrees[row.worktree].Title) {
 			verb = "enter jump"
 		}
-		return footerStyle.Render("↑/↓ move · " + verb + " · d delete · [ ] pane · r refresh · q quit")
+		if m.filter.active {
+			return footerStyle.Render("type to filter · ↑/↓ move · enter accept · esc clear")
+		}
+		return footerStyle.Render("↑/↓ move · " + verb + " · / filter · d delete · [ ] pane · r refresh · q quit")
 	}
 	// The review queue rebinds enter and adds two keys, so the hint follows the
 	// cursor rather than listing every binding at once.
