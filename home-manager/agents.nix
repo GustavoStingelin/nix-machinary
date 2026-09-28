@@ -125,15 +125,71 @@ let
     }
   '';
 
+  # Hindsight coding-agents runtime, staged imperatively by
+  # `npx @vectorize-io/hindsight-coding-agents install claude-code`. Its
+  # installer cannot write the store-backed settings.json, so the hooks it
+  # would merge are declared here instead.
+  hindsightRuntime = "${config.home.homeDirectory}/.hindsight/coding-agents";
+  hindsightHook = file: timeout: {
+    type = "command";
+    command = ''node "${hindsightRuntime}/dist/${file}"'';
+    inherit timeout;
+  };
+
   # Claude Code reads ~/.claude/settings.json. Home Manager owns this file, so
-  # the existing hand-managed content is ported here verbatim; the zwm-attn
-  # attention hooks (UserPromptSubmit=working, Notification=waiting, Stop=done)
-  # are the only additions. CLAUDE.md and settings.local.json remain unmanaged.
+  # the existing hand-managed content is ported here verbatim. Additions are
+  # the zwm-attn attention hooks (UserPromptSubmit=working, Notification=waiting,
+  # Stop=done) and the Hindsight integration: its hooks, MCP permissions,
+  # longer transcript retention, and disabled auto memory. CLAUDE.md and
+  # settings.local.json remain unmanaged.
   claudeSettings = {
+    # `hindsight-banks` is the Hindsight server's own MCP endpoint, where every
+    # tool takes a bank_id, so an agent can reach any bank rather than only the
+    # current repo's. It lives in the mutable ~/.claude.json, registered with
+    # `claude mcp add --scope user --transport http hindsight-banks
+    # http://192.168.18.174:8888/mcp/`. Reads are allowed, writes prompt, and
+    # the destructive tools are denied outright.
     permissions = {
-      allow = [ "mcp__codegraph__*" ];
+      allow = [
+        "mcp__codegraph__*"
+      ]
+      ++ map (tool: "mcp__hindsight-banks__${tool}") [
+        "list_banks"
+        "get_bank"
+        "get_bank_stats"
+        "recall"
+        "reflect"
+        "list_memories"
+        "get_memory"
+        "list_documents"
+        "get_document"
+        "list_tags"
+        "list_operations"
+        "get_operation"
+        "list_mental_models"
+        "get_mental_model"
+        "list_directives"
+        "get_knowledge_base_tree"
+        "search_knowledge_base"
+        "get_knowledge_page"
+      ];
+      deny = map (tool: "mcp__hindsight-banks__${tool}") [
+        "delete_bank"
+        "clear_memories"
+        "delete_document"
+        "delete_knowledge_node"
+        "delete_mental_model"
+        "clear_mental_model"
+        "delete_directive"
+        "invalidate_memory"
+        "cancel_operation"
+        "update_bank"
+      ];
       defaultMode = "auto";
     };
+    # Keep transcripts well past the 30-day default so past sessions can still
+    # be imported into their repo's Hindsight bank.
+    cleanupPeriodDays = 365;
     hooks = {
       PreToolUse = [
         {
@@ -141,18 +197,26 @@ let
           hooks = [ { type = "command"; command = "rtk hook claude"; } ];
         }
       ];
+      # Hindsight: session-start context, per-prompt recall, retain on stop.
+      SessionStart = [
+        { hooks = [ (hindsightHook "claude-sessionstart-hook.js" 30) ]; }
+      ];
       UserPromptSubmit = [
         {
           hooks = [
             { type = "command"; command = "codegraph prompt-hook"; }
             { type = "command"; command = "zwm-attn working --agent claude"; }
+            (hindsightHook "claude-hook.js" 30)
           ];
         }
       ];
       # Raise the tab attention glyph and record the three-way state.
       Stop = [
         {
-          hooks = [ { type = "command"; command = "zwm-attn done --agent claude"; } ];
+          hooks = [
+            { type = "command"; command = "zwm-attn done --agent claude"; }
+            (hindsightHook "claude-stop-hook.js" 60)
+          ];
         }
       ];
       Notification = [
@@ -176,7 +240,9 @@ let
       "playwright@claude-plugins-official" = true;
       "feature-dev@claude-plugins-official" = true;
       "pr-review-toolkit@claude-plugins-official" = true;
-      "hindsight-memory@hindsight" = true;
+      # Superseded by the coding-agents runtime; both on would double every
+      # recall and retain, and their MCP servers share the `hindsight` name.
+      "hindsight-memory@hindsight" = false;
       "gopls-lsp@claude-plugins-official" = true;
     };
     extraKnownMarketplaces = {
@@ -190,6 +256,22 @@ let
     askUserQuestionTimeout = "never";
     theme = "auto";
     editorMode = "normal";
+    # Hindsight is the single long-term memory; Claude Code's file-based auto
+    # memory would split knowledge into a store opencode can't see.
+    autoMemoryEnabled = false;
+  };
+
+  # Coding-agents runtime config (~/.hindsight/coding-agent.json). No bankId,
+  # so each repo resolves to its own `coding-agent::<repo>` bank: one shared
+  # bank let whichever repo had the most history crowd every other repo out of
+  # the knowledge pages and per-prompt recall. The old shared `opencode` bank
+  # stays on the server as a cross-repo archive, reachable through the
+  # `hindsight-banks` MCP server. The runtime sets each bank's missions itself.
+  # autoUpdate stays off so the runtime changes only when this repo says so.
+  hindsightCodingAgentConfig = {
+    serverMode = "self-hosted";
+    apiUrl = "http://192.168.18.174:8888";
+    autoUpdate = false;
   };
 in
 {
@@ -198,4 +280,10 @@ in
   xdg.configFile."opencode/plugins/zwm-attn.ts".text = opencodePlugin;
 
   home.file.".claude/settings.json".text = builtins.toJSON claudeSettings;
+
+  home.file.".hindsight/coding-agent.json".text =
+    builtins.toJSON hindsightCodingAgentConfig;
+
+  home.file.".claude/skills/hindsight-coding-agent".source =
+    config.lib.file.mkOutOfStoreSymlink "${hindsightRuntime}/skill";
 }
