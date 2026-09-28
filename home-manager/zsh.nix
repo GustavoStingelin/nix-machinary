@@ -26,6 +26,7 @@
       export GIT_EDITOR=hx
       export HINDSIGHT_API_URL="http://192.168.18.174:8888"
       export PATH="$HOME/.npm-global/bin:$PATH"
+      export PATH="$HOME/.bun/bin:$PATH"
       export CGO_ENABLED=0
 
       # Accept suggestion with Ctrl+Space
