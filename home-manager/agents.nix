@@ -259,6 +259,13 @@ let
     # Hindsight is the single long-term memory; Claude Code's file-based auto
     # memory would split knowledge into a store opencode can't see.
     autoMemoryEnabled = false;
+    # No Co-Authored-By trailer on commits or "Generated with Claude Code" line
+    # on PRs. Object form, since older Claude Code rejects `attribution = false`.
+    attribution = {
+      commit = "";
+      pr = "";
+      sessionUrl = false;
+    };
   };
 
   # Coding-agents runtime config (~/.hindsight/coding-agent.json). No bankId,
