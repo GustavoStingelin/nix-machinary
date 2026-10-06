@@ -24,9 +24,10 @@ type PullRequestSummary struct {
 	Author string
 }
 
-// ReviewRequest is an open pull request awaiting the authenticated user's
-// review. It spans every repository the search can see, so Repository is
-// "owner/name" and may name a repo with no local checkout.
+// ReviewRequest is an open pull request found by a cross-repository search:
+// one awaiting the authenticated user's review, or one they authored. It spans
+// every repository the search can see, so Repository is "owner/name" and may
+// name a repo with no local checkout.
 type ReviewRequest struct {
 	Number     PullRequestNumber
 	Repository string

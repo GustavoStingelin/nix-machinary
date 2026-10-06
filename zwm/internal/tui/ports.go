@@ -43,7 +43,8 @@ type AgentView struct {
 	State    string
 }
 
-// ReviewView is one open pull request awaiting the user's review.
+// ReviewView is one open pull request: one awaiting the user's review in the
+// dashboard's review queue, or one the user authored in the "my PRs" pane.
 //
 // Project is the local project under the code root that the pull request's
 // repository maps to, empty when there is no local checkout — those rows still
@@ -54,16 +55,19 @@ type AgentView struct {
 // Base is the branch the pull request merges into, which for a stacked pull
 // request is the branch below it rather than the repository's default branch.
 // It is shown because it decides what a review is actually diffing.
+// LocalBranch is set only on the user's own pull requests: their head branch
+// exists locally, so it can be reopened with wco rather than a wpr checkout.
 type ReviewView struct {
-	Number     string
-	Repository string
-	Project    string
-	Title      string
-	Author     string
-	Base       string
-	Head       string
-	Worktree   string
-	Stale      bool
+	Number      string
+	Repository  string
+	Project     string
+	Title       string
+	Author      string
+	Base        string
+	Head        string
+	Worktree    string
+	Stale       bool
+	LocalBranch bool
 }
 
 // WorktreeKind says how a worktree is opened, which is the one thing that is not
@@ -136,6 +140,9 @@ type Source interface {
 	// touching no network so the section has rows to draw immediately. ok is
 	// false when no usable cache exists.
 	CachedReviews(ctx context.Context) (reviews []ReviewView, fetchedAt time.Time, ok bool)
+	// MyPullRequests lists the user's own open pull requests, in any order. It
+	// costs the same as Reviews and is refreshed on the same schedule.
+	MyPullRequests(ctx context.Context) ([]ReviewView, error)
 }
 
 // JumpTarget is where Enter should land: a tab, plus the pane inside it when

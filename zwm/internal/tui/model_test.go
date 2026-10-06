@@ -19,6 +19,7 @@ type fakeSource struct {
 	reviewErr   error
 	worktrees   []WorktreeView
 	worktreeErr error
+	mine        []ReviewView
 	cached      []ReviewView
 	cachedAt    time.Time
 	cachedOK    bool
@@ -33,6 +34,10 @@ func (source fakeSource) Reviews(context.Context) ([]ReviewView, error) {
 
 func (source fakeSource) CachedReviews(context.Context) ([]ReviewView, time.Time, bool) {
 	return source.cached, source.cachedAt, source.cachedOK
+}
+
+func (source fakeSource) MyPullRequests(context.Context) ([]ReviewView, error) {
+	return source.mine, nil
 }
 
 func (source fakeSource) Sessions(context.Context) ([]SessionView, error) {
@@ -1130,7 +1135,7 @@ func TestPanes_worktrees_are_absent_from_the_dashboard_pane(t *testing.T) {
 	}
 }
 
-func TestPanes_bracket_keys_cycle_between_the_two_panes(t *testing.T) {
+func TestPanes_bracket_keys_cycle_between_the_panes(t *testing.T) {
 	m, _, _ := worktreeModel(t)
 	m.switchPane(paneDashboard)
 
@@ -1138,10 +1143,13 @@ func TestPanes_bracket_keys_cycle_between_the_two_panes(t *testing.T) {
 	require.Equal(t, paneWorktrees, m.activePane)
 
 	send(t, m, key("]"))
-	require.Equal(t, paneDashboard, m.activePane, "two panes, so ] wraps")
+	require.Equal(t, paneMine, m.activePane)
+
+	send(t, m, key("]"))
+	require.Equal(t, paneDashboard, m.activePane, "] wraps after the last pane")
 
 	send(t, m, key("["))
-	require.Equal(t, paneWorktrees, m.activePane)
+	require.Equal(t, paneMine, m.activePane)
 }
 
 func TestPanes_number_keys_select_a_pane_directly(t *testing.T) {
@@ -1152,6 +1160,9 @@ func TestPanes_number_keys_select_a_pane_directly(t *testing.T) {
 
 	send(t, m, key("2"))
 	require.Equal(t, paneWorktrees, m.activePane)
+
+	send(t, m, key("3"))
+	require.Equal(t, paneMine, m.activePane)
 }
 
 // The panes list unrelated things, so a carried-over index would land somewhere
@@ -1481,4 +1492,136 @@ func TestFilter_is_a_worktrees_pane_key_only(t *testing.T) {
 
 	require.False(t, m.filter.active)
 	require.NotContains(t, m.View(), "/▏")
+}
+
+// --- my pull requests ---
+
+func mineFixtures() []ReviewView {
+	return []ReviewView{
+		// Its branch is already checked out in a worktree whose tab is open.
+		{Number: "1400", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "wallet: live work", Base: "master", Head: "live", LocalBranch: true},
+		// Local branch, but no worktree on it yet.
+		{Number: "1401", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "wallet: parked", Base: "master", Head: "parked", LocalBranch: true},
+		// Opened from another machine: nothing local at all.
+		{Number: "1402", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "wallet: elsewhere", Base: "master", Head: "elsewhere"},
+		// Already checked out earlier through wpr.
+		{Number: "1313", Repository: "btcsuite/btcwallet", Project: "btcwallet",
+			Title: "wallet: via wpr", Base: "master", Head: "via-wpr"},
+		{Number: "9", Repository: "someone/not-cloned", Title: "far away", Base: "main", Head: "x"},
+	}
+}
+
+func mineModel(t *testing.T) (*model, *fakeJumper, *fakeCommander) {
+	t.Helper()
+	m, jumper, commander := worktreeModel(t)
+	send(t, m, myPullRequestsLoadedMsg{pullRequests: mineFixtures()})
+	m.switchPane(paneMine)
+	return m, jumper, commander
+}
+
+func focusMine(t *testing.T, m *model, number string) {
+	t.Helper()
+	for i, row := range m.rows {
+		if row.kind == selMine && m.mine[row.mine].Number == number {
+			m.cursor = i
+			return
+		}
+	}
+	t.Fatalf("pull request %s is not a navigable row", number)
+}
+
+func TestMine_pane_lists_only_the_users_pull_requests_with_where_enter_goes(t *testing.T) {
+	m, _, _ := mineModel(t)
+
+	view := m.View()
+	require.Contains(t, view, "my pull requests")
+	require.Contains(t, view, "─── btcsuite/btcwallet ───")
+	require.Contains(t, view, "parked → master")
+	require.Contains(t, view, "open")
+	require.Contains(t, view, "branch")
+	require.Contains(t, view, "(not cloned)")
+	for _, row := range m.rows {
+		require.Equal(t, selMine, row.kind)
+	}
+}
+
+func TestMine_enter_jumps_to_the_open_tab_of_its_branch(t *testing.T) {
+	m, jumper, commander := mineModel(t)
+	focusMine(t, m, "1400")
+
+	send(t, m, key("enter"))
+
+	require.Equal(t, []jumpCall{{session: "bitcoin", tab: "btcwallet:live"}}, jumper.calls)
+	require.Empty(t, commander.calls)
+}
+
+// Your own pull request is a branch you push to, so it reopens through wco and
+// keeps its name; wpr would rename it to zwm/pr-<n>-<hash>.
+func TestMine_enter_reopens_a_local_branch_with_wco(t *testing.T) {
+	m, _, commander := mineModel(t)
+	focusMine(t, m, "1401")
+
+	send(t, m, key("enter"))
+
+	require.Equal(t, []commandCall{{op: "wco", project: "btcwallet", arg: "parked"}}, commander.calls)
+}
+
+func TestMine_enter_falls_back_to_wpr_without_a_local_branch(t *testing.T) {
+	m, _, commander := mineModel(t)
+	focusMine(t, m, "1402")
+
+	send(t, m, key("enter"))
+
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1402"}}, commander.calls)
+}
+
+func TestMine_enter_reuses_an_existing_wpr_worktree(t *testing.T) {
+	m, _, commander := mineModel(t)
+	focusMine(t, m, "1313")
+
+	send(t, m, key("enter"))
+
+	require.Equal(t, []commandCall{{op: "wpr", project: "btcwallet", arg: "1313"}}, commander.calls)
+}
+
+func TestMine_enter_refuses_a_repository_with_no_local_checkout(t *testing.T) {
+	m, _, commander := mineModel(t)
+	focusMine(t, m, "9")
+
+	require.Nil(t, m.activate())
+	require.Empty(t, commander.calls)
+	require.Contains(t, m.status, "no checkout")
+}
+
+func TestMine_browse_key_opens_the_pull_request(t *testing.T) {
+	m, _, commander := mineModel(t)
+	focusMine(t, m, "9")
+
+	send(t, m, key("b"))
+
+	require.Equal(t, []commandCall{{op: "browse", repository: "someone/not-cloned", arg: "9"}}, commander.calls)
+}
+
+func TestMine_empty_list_is_distinguished_from_not_yet_loaded(t *testing.T) {
+	m, _, _ := worktreeModel(t)
+	m.switchPane(paneMine)
+	require.Contains(t, m.View(), "loading…")
+
+	send(t, m, myPullRequestsLoadedMsg{})
+
+	require.Contains(t, m.View(), "(no open pull requests)")
+}
+
+func TestMine_failed_fetch_keeps_the_rows_and_reports(t *testing.T) {
+	m, _, _ := mineModel(t)
+	m.mineRefreshing = true
+
+	send(t, m, myPullRequestsFailedMsg{err: errors.New("gh: offline")})
+
+	require.False(t, m.mineRefreshing)
+	require.Len(t, m.mine, len(mineFixtures()))
+	require.Contains(t, m.status, "offline")
 }

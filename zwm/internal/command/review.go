@@ -106,9 +106,39 @@ func (source reviewSource) Reviews(ctx context.Context) ([]tui.ReviewView, error
 	if err != nil {
 		return nil, errs.Wrap(errs.External, "list review requests", err)
 	}
+	views := source.views(ctx, home, requests, source.annotate)
+	// Best-effort: a cache that cannot be written costs the next start a slow
+	// first render, which is not worth failing a good fetch over.
+	_ = source.cache.Save(cacheSnapshot(views))
+	return views, nil
+}
 
+// MyPullRequests lists the user's own open pull requests. It costs what Reviews
+// does, except that the local probe is whether the head branch exists — your own
+// pull request is usually a branch you already have, which wco reopens with its
+// upstream intact, whereas a wpr checkout would rename it.
+func (source reviewSource) MyPullRequests(ctx context.Context) ([]tui.ReviewView, error) {
+	home, present := source.env.Lookup(zellij.EnvironmentHome)
+	if !present || home == "" {
+		return nil, errs.New(errs.Preflight, "HOME is not set")
+	}
+	requests, err := source.github.ListAuthoredPullRequests(ctx, github.Directory(home))
+	if err != nil {
+		return nil, errs.Wrap(errs.External, "list my pull requests", err)
+	}
+	return source.views(ctx, home, requests, source.annotateAuthored), nil
+}
+
+// views maps search results to rows, matching each repository to a project under
+// the code root and running annotate on every row concurrently.
+func (source reviewSource) views(
+	ctx context.Context,
+	home string,
+	requests []github.ReviewRequest,
+	annotate func(context.Context, string, *tui.ReviewView, github.ReviewRequest),
+) []tui.ReviewView {
 	// A repository maps to a project only when the code root holds a directory of
-	// the same name; anything else is a review request on something not cloned.
+	// the same name; anything else is a pull request on something not cloned.
 	projects := make(map[string]struct{})
 	for _, name := range project.ListNames(project.Directory(home)) {
 		projects[name] = struct{}{}
@@ -134,14 +164,29 @@ func (source reviewSource) Reviews(ctx context.Context) ([]tui.ReviewView, error
 			defer group.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			source.annotate(ctx, home, &views[index], request)
+			annotate(ctx, home, &views[index], request)
 		}(index, request)
 	}
 	group.Wait()
-	// Best-effort: a cache that cannot be written costs the next start a slow
-	// first render, which is not worth failing a good fetch over.
-	_ = source.cache.Save(cacheSnapshot(views))
-	return views, nil
+	return views
+}
+
+// annotateAuthored fills in one of the user's own pull requests: its branches,
+// and whether the head branch exists locally. Best-effort like annotate — an
+// unreadable ref or branch leaves the row in place with less detail.
+func (source reviewSource) annotateAuthored(ctx context.Context, home string, view *tui.ReviewView, request github.ReviewRequest) {
+	refs, err := source.github.ViewPullRequestRefs(ctx, github.Directory(home), request.Repository, request.Number)
+	if err != nil {
+		return
+	}
+	view.Base = refs.BaseRefName
+	view.Head = refs.HeadRefName
+	if view.Project == "" {
+		return
+	}
+	root := git.Directory(filepath.Join(home, "code", view.Project))
+	exists, err := source.git.LocalBranchExists(ctx, root, git.Branch(refs.HeadRefName))
+	view.LocalBranch = err == nil && exists
 }
 
 // annotate fills in one row's branch detail and local state. Every step is

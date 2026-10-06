@@ -48,8 +48,8 @@ func (client Client) ListOpenPullRequests(ctx context.Context, directory Directo
 	return summaries, nil
 }
 
-// reviewRequestLimit caps the review queue. The search is one call regardless of
-// size, but an unbounded list would make the dashboard section unreadable.
+// reviewRequestLimit caps every pull-request search. The search is one call
+// regardless of size, but an unbounded list would make the dashboard unreadable.
 const reviewRequestLimit = "50"
 
 // ListReviewRequests returns open pull requests that request the authenticated
@@ -57,11 +57,26 @@ const reviewRequestLimit = "50"
 // no branch detail: `gh search prs` cannot return baseRefName/headRefName, so
 // callers needing refs follow up with ViewPullRequestRefs per pull request.
 func (client Client) ListReviewRequests(ctx context.Context, directory Directory) ([]ReviewRequest, error) {
-	output, err := client.run(ctx, directory,
-		"search", "prs", "--review-requested", "@me", "--state", "open",
+	return client.searchOpenPullRequests(ctx, directory, "--review-requested", "@me")
+}
+
+// ListAuthoredPullRequests returns the authenticated user's own open pull
+// requests, across every repository. Like ListReviewRequests it is one search
+// call with no branch detail.
+func (client Client) ListAuthoredPullRequests(ctx context.Context, directory Directory) ([]ReviewRequest, error) {
+	return client.searchOpenPullRequests(ctx, directory, "--author", "@me")
+}
+
+// searchOpenPullRequests runs one `gh search prs` for open pull requests matching
+// qualifier, which is the only part that differs between the searches above.
+func (client Client) searchOpenPullRequests(ctx context.Context, directory Directory, qualifier ...string) ([]ReviewRequest, error) {
+	arguments := append([]string{"search", "prs"}, qualifier...)
+	arguments = append(arguments,
+		"--state", "open",
 		"--limit", reviewRequestLimit,
 		"--json", "number,title,author,repository",
 		"--jq", ".[] | [.number, .repository.nameWithOwner, .author.login, .title] | @tsv")
+	output, err := client.run(ctx, directory, arguments...)
 	if err != nil {
 		return nil, err
 	}

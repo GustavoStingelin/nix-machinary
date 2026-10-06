@@ -46,10 +46,10 @@ func (m *model) View() string {
 	return out.String()
 }
 
-// paneBar names the two panes and marks the active one, so the keys that switch
+// paneBar names the panes and marks the active one, so the keys that switch
 // them are visible rather than something you have to know.
 func (m *model) paneBar() string {
-	labels := []string{"1 dashboard", "2 worktrees"}
+	labels := []string{"1 dashboard", "2 worktrees", "3 my PRs"}
 	rendered := make([]string, 0, len(labels))
 	for index, label := range labels {
 		if pane(index) == m.activePane {
@@ -74,8 +74,11 @@ func (m *model) paneBar() string {
 // displayLines flattens the active pane into rendered rows, tracking which map
 // back to navigable selections so the cursor and scrolling can be resolved.
 func (m *model) displayLines() []displayLine {
-	if m.activePane == paneWorktrees {
+	switch m.activePane {
+	case paneWorktrees:
 		return m.worktreeLines()
+	case paneMine:
+		return m.mineLines()
 	}
 	lines := make([]displayLine, 0)
 	row := 0
@@ -168,6 +171,53 @@ func (m *model) worktreeLines() []displayLine {
 		lines = append(lines, displayLine{text: renderWorktree(entry, open, m.now(), m.cursor == row), row: row})
 	}
 	return lines
+}
+
+// mineLines renders the "my PRs" pane, grouped under a heading per repository
+// like the worktrees pane is per project.
+func (m *model) mineLines() []displayLine {
+	header := titleStyle.Render("my pull requests")
+	if m.mineRefreshing {
+		header += " " + workingStyle.Render(spinnerFrames[m.spinnerFrame%len(spinnerFrames)])
+	}
+	lines := []displayLine{{text: header, row: -1}}
+	if !m.mineLoaded {
+		return append(lines, displayLine{text: dimStyle.Render("  loading…"), row: -1})
+	}
+	if len(m.mine) == 0 {
+		return append(lines, displayLine{text: dimStyle.Render("  (no open pull requests)"), row: -1})
+	}
+	width := reviewNumberWidth(m.mine)
+	repository := ""
+	for row, selected := range m.rows {
+		pullRequest := m.mine[selected.mine]
+		if pullRequest.Repository != repository {
+			repository = pullRequest.Repository
+			lines = append(lines, displayLine{text: dimStyle.Render("─── " + repository + " ───"), row: -1})
+		}
+		lines = append(lines, displayLine{text: m.renderMine(pullRequest, width, m.cursor == row), row: row})
+	}
+	return lines
+}
+
+// renderMine renders one of the user's pull requests: its branches, then where
+// Enter will take it — an open tab, an existing worktree, a local branch, or
+// (with no badge) a fresh wpr checkout.
+func (m *model) renderMine(pullRequest ReviewView, numberWidth int, selected bool) string {
+	line := gutter(selected) + fmt.Sprintf("#%-*s", numberWidth, pullRequest.Number)
+	if pullRequest.Project == "" {
+		return line + dimStyle.Render(reviewBranches(pullRequest)+"  "+pullRequest.Title+"  (not cloned)")
+	}
+	line += dimStyle.Render(reviewBranches(pullRequest))
+	switch entry, ok := m.mineWorktree(pullRequest); {
+	case ok && m.tabIsOpenInCurrentSession(entry.Title):
+		line += "  " + doneStyle.Render("open")
+	case ok:
+		line += "  " + doneStyle.Render("worktree")
+	case pullRequest.LocalBranch:
+		line += "  " + dimStyle.Render("branch")
+	}
+	return line + "  " + pullRequest.Title
 }
 
 func agentMatchesAnyTab(agent AgentView, tabs []TabView) bool {
@@ -424,6 +474,9 @@ func rollupBadge(agents []AgentView) string {
 func (m *model) footer() string {
 	if m.status != "" {
 		return errorStyle.Render(m.status)
+	}
+	if m.activePane == paneMine {
+		return footerStyle.Render("↑/↓ move · enter work on it · b browser · [ ] pane · r refresh · q quit")
 	}
 	if m.activePane == paneWorktrees {
 		verb := "enter open"

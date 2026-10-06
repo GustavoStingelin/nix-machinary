@@ -123,6 +123,10 @@ func (source tuiSource) Reviews(ctx context.Context) ([]tui.ReviewView, error) {
 	return source.reviews.Reviews(ctx)
 }
 
+func (source tuiSource) MyPullRequests(ctx context.Context) ([]tui.ReviewView, error) {
+	return source.reviews.MyPullRequests(ctx)
+}
+
 func (source tuiSource) CachedReviews(ctx context.Context) ([]tui.ReviewView, time.Time, bool) {
 	return source.reviews.CachedReviews(ctx)
 }

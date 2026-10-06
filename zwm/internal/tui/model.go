@@ -55,6 +55,13 @@ type reviewsFailedMsg struct{ err error }
 // and the section simply stays empty.
 type worktreesLoadedMsg struct{ worktrees []WorktreeView }
 
+// myPullRequestsLoadedMsg and myPullRequestsFailedMsg mirror the review queue's
+// pair: a failure keeps the rows on screen and must still clear the in-flight
+// flag.
+type myPullRequestsLoadedMsg struct{ pullRequests []ReviewView }
+
+type myPullRequestsFailedMsg struct{ err error }
+
 type reviewTickMsg struct{}
 
 type spinnerTickMsg struct{}
@@ -94,19 +101,21 @@ type sessionState struct {
 	agents   []AgentView
 }
 
-// The dashboard is split into two panes because the two halves answer different
-// questions: what is happening right now (agents, reviews, sessions) and what is
-// on disk (every worktree of every project). The worktree list is long and
-// mostly static, so sharing one scroll with the live state buried it.
+// The dashboard is split into panes because they answer different questions:
+// what is happening right now (agents, reviews, sessions), what is on disk (every
+// worktree of every project), and what you have in flight on GitHub (your own
+// open pull requests). The latter two are long and mostly static, so sharing one
+// scroll with the live state buried them.
 type pane int
 
 const (
 	paneDashboard pane = iota
 	paneWorktrees
+	paneMine
 )
 
 func (p pane) next(delta int) pane {
-	const count = 2
+	const count = 3
 	return pane(((int(p)+delta)%count + count) % count)
 }
 
@@ -118,11 +127,12 @@ const (
 	selAgent
 	selReview
 	selWorktree
+	selMine
 )
 
 // selection points at a navigable row: a session header, a tab within one, an
-// entry in the top agents panel, a pull request in the review queue, or a
-// worktree in the worktrees pane.
+// entry in the top agents panel, a pull request in the review queue, a worktree
+// in the worktrees pane, or one of the user's own pull requests.
 type selection struct {
 	kind     selKind
 	session  int
@@ -130,6 +140,7 @@ type selection struct {
 	agent    int
 	review   int
 	worktree int
+	mine     int
 }
 
 // agentEntry is one running agent in the top triage panel, flattened across all
@@ -153,6 +164,7 @@ type model struct {
 	agents    []agentEntry
 	reviews   []ReviewView
 	worktrees []WorktreeView
+	mine      []ReviewView
 	rows      []selection
 	cursor    int
 	offset    int
@@ -163,6 +175,10 @@ type model struct {
 	// worktreesLoaded does the same for the worktree list, which is empty both before
 	// its first load and on a machine with no managed worktrees.
 	worktreesLoaded bool
+	// mineLoaded and mineRefreshing are the "my PRs" pane's counterparts of
+	// reviewsLoaded and refreshing.
+	mineLoaded     bool
+	mineRefreshing bool
 	// refreshing drives the spinner and, more importantly, stops a second fetch
 	// starting while one is in flight.
 	refreshing   bool
@@ -198,6 +214,7 @@ func (m *model) Init() tea.Cmd {
 		m.loadSessionsCmd(),
 		m.loadCachedReviewsCmd(),
 		m.beginReviewRefresh(),
+		m.beginMineRefresh(),
 		m.loadWorktreesCmd(),
 		tickCmd(),
 		reviewTickCmd(),
@@ -292,8 +309,36 @@ func (m *model) beginReviewRefresh() tea.Cmd {
 		return nil
 	}
 	m.refreshing = true
+	if m.mineRefreshing {
+		return m.loadReviewsCmd() // the spinner loop is already running
+	}
 	m.spinnerFrame = 0
 	return tea.Batch(m.loadReviewsCmd(), spinnerTickCmd())
+}
+
+// loadMyPullRequestsCmd fetches the user's own open pull requests. Like the
+// review queue, a failure keeps what is on screen.
+func (m *model) loadMyPullRequestsCmd() tea.Cmd {
+	return func() tea.Msg {
+		pullRequests, err := m.source.MyPullRequests(m.ctx)
+		if err != nil {
+			return myPullRequestsFailedMsg{err}
+		}
+		return myPullRequestsLoadedMsg{pullRequests}
+	}
+}
+
+// beginMineRefresh is beginReviewRefresh for the "my PRs" pane. It shares the
+// spinner loop, which keeps turning while either fetch is in flight.
+func (m *model) beginMineRefresh() tea.Cmd {
+	if m.mineRefreshing {
+		return nil
+	}
+	m.mineRefreshing = true
+	if m.refreshing {
+		return m.loadMyPullRequestsCmd() // the spinner loop is already running
+	}
+	return tea.Batch(m.loadMyPullRequestsCmd(), spinnerTickCmd())
 }
 
 func tickCmd() tea.Cmd {
@@ -347,6 +392,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshing = false
 		m.rebuildRows()
 		return m, nil
+	case myPullRequestsLoadedMsg:
+		m.mine = msg.pullRequests
+		sortReviews(m.mine)
+		m.mineLoaded = true
+		m.mineRefreshing = false
+		m.rebuildRows()
+		return m, nil
+	case myPullRequestsFailedMsg:
+		m.mineRefreshing = false
+		m.status = msg.err.Error()
+		return m, nil
 	case worktreesLoadedMsg:
 		m.worktrees = msg.worktrees
 		m.worktreesLoaded = true
@@ -359,15 +415,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = msg.err.Error()
 		return m, nil
 	case spinnerTickMsg:
-		if !m.refreshing {
-			return m, nil // fetch finished: let the tick loop end
+		if !m.refreshing && !m.mineRefreshing {
+			return m, nil // fetches finished: let the tick loop end
 		}
 		m.spinnerFrame++
 		return m, spinnerTickCmd()
 	case tickMsg:
 		return m, tea.Batch(m.loadSessionsCmd(), tickCmd())
 	case reviewTickMsg:
-		return m, tea.Batch(m.beginReviewRefresh(), reviewTickCmd())
+		return m, tea.Batch(m.beginReviewRefresh(), m.beginMineRefresh(), reviewTickCmd())
 	case browsedMsg:
 		// Stay in the dashboard either way, so the queue is still there to work
 		// through once the browser has the pull request.
@@ -449,7 +505,7 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.status = ""
-		return m, tea.Batch(m.loadSessionsCmd(), m.beginReviewRefresh(), m.loadWorktreesCmd())
+		return m, tea.Batch(m.loadSessionsCmd(), m.beginReviewRefresh(), m.beginMineRefresh(), m.loadWorktreesCmd())
 	case "enter":
 		return m, m.activate()
 	case "ctrl+f":
@@ -477,6 +533,8 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.switchPane(paneDashboard)
 	case "2":
 		return m, m.switchPane(paneWorktrees)
+	case "3":
+		return m, m.switchPane(paneMine)
 	case "/":
 		return m, m.beginFilter()
 	}
@@ -535,16 +593,24 @@ func (m *model) firstRowOfKind(kind selKind) (int, bool) {
 	return 0, false
 }
 
-// browseReview opens the pull request under the cursor on GitHub. It needs no
-// local checkout, so unlike the other review actions it also works on rows whose
-// repository is not cloned — often exactly the ones you want to look at in a
-// browser rather than check out.
+// browseReview opens the pull request under the cursor — in the review queue or
+// the "my PRs" pane — on GitHub. It needs no local checkout, so unlike the other
+// pull-request actions it also works on rows whose repository is not cloned —
+// often exactly the ones you want to look at in a browser rather than check out.
 func (m *model) browseReview() tea.Cmd {
 	row, ok := m.currentRow()
-	if !ok || row.kind != selReview {
+	if !ok {
 		return nil
 	}
-	review := m.reviews[row.review]
+	var review ReviewView
+	switch row.kind {
+	case selReview:
+		review = m.reviews[row.review]
+	case selMine:
+		review = m.mine[row.mine]
+	default:
+		return nil
+	}
 	m.status = ""
 	return func() tea.Msg {
 		err := m.commander.BrowsePullRequest(m.ctx, review.Repository, review.Number)
@@ -676,16 +742,20 @@ func (m *model) collapse() tea.Cmd {
 	return nil
 }
 
-// activateWorktree acts on a worktree row. A worktree whose tab is still open in
-// the current session is a jump, not a checkout: re-running the command would be
-// slower and would land on the same tab anyway. Otherwise the command that owns
-// the worktree reopens it, which is why the row records its kind.
+// activateWorktree acts on a worktree row.
 func (m *model) activateWorktree() tea.Cmd {
 	row, ok := m.currentRow()
 	if !ok || row.kind != selWorktree {
 		return nil
 	}
-	entry := m.worktrees[row.worktree]
+	return m.openWorktree(m.worktrees[row.worktree])
+}
+
+// openWorktree gets a tab on a worktree. One whose tab is still open in the
+// current session is a jump, not a checkout: re-running the command would be
+// slower and would land on the same tab anyway. Otherwise the command that owns
+// the worktree reopens it, which is why the row records its kind.
+func (m *model) openWorktree(entry WorktreeView) tea.Cmd {
 	if m.tabIsOpenInCurrentSession(entry.Title) {
 		return m.jumpTo(JumpTarget{Session: m.current, Tab: entry.Title})
 	}
@@ -711,6 +781,56 @@ func (m *model) activateWorktree() tea.Cmd {
 	return m.runCommandCmd(func(ctx context.Context) error {
 		return m.commander.CheckoutExisting(ctx, entry.Project, entry.Branch)
 	})
+}
+
+// activateMine opens one of the user's own pull requests to work on. Your own
+// pull request is normally a branch you already have, so the order is: the
+// worktree that already holds the head branch, then a wco of the local branch,
+// and only when neither exists a wpr checkout. wpr is last because it renames
+// the branch to zwm/pr-<n>-<hash>, which is fine for reading someone else's code
+// but not for pushing to your own.
+func (m *model) activateMine() tea.Cmd {
+	row, ok := m.currentRow()
+	if !ok || row.kind != selMine {
+		return nil
+	}
+	pullRequest := m.mine[row.mine]
+	if pullRequest.Project == "" {
+		m.status = fmt.Sprintf("%s has no checkout under ~/code — clone it first", pullRequest.Repository)
+		return nil
+	}
+	if entry, ok := m.mineWorktree(pullRequest); ok {
+		return m.openWorktree(entry)
+	}
+	if pullRequest.LocalBranch {
+		m.status = "opening " + pullRequest.Project + ":" + pullRequest.Head + "…"
+		return m.runCommandCmd(func(ctx context.Context) error {
+			return m.commander.CheckoutExisting(ctx, pullRequest.Project, pullRequest.Head)
+		})
+	}
+	m.status = "checking out #" + pullRequest.Number + "…"
+	return m.runCommandCmd(func(ctx context.Context) error {
+		return m.commander.PullRequest(ctx, pullRequest.Project, pullRequest.Number, false)
+	})
+}
+
+// mineWorktree finds the worktree already holding a pull request: a branch
+// worktree on its head branch, or the managed worktree wpr made for it. The
+// primary worktree carries no branch, so it is never matched — wco then reports
+// that the branch is checked out there.
+func (m *model) mineWorktree(pullRequest ReviewView) (WorktreeView, bool) {
+	for _, entry := range m.worktrees {
+		if entry.Project != pullRequest.Project {
+			continue
+		}
+		if entry.Kind == WorktreePullRequest && entry.PullRequest == pullRequest.Number {
+			return entry, true
+		}
+		if entry.Kind != WorktreePullRequest && pullRequest.Head != "" && entry.Branch == pullRequest.Head {
+			return entry, true
+		}
+	}
+	return WorktreeView{}, false
 }
 
 // tabIsOpenInCurrentSession reports whether a tab with this title is open in the
@@ -757,6 +877,8 @@ func (m *model) activate() tea.Cmd {
 		return m.activateReview(false, false)
 	case selWorktree:
 		return m.activateWorktree()
+	case selMine:
+		return m.activateMine()
 	case selSession:
 		return m.toggle()
 	case selTab:
@@ -951,6 +1073,17 @@ func reviewNumber(value string) int {
 // then session headers and the tab rows of expanded sessions. Keeps the cursor in
 // range.
 func (m *model) rebuildRows() {
+	if m.activePane == paneMine {
+		rows := make([]selection, 0, len(m.mine))
+		for index := range m.mine {
+			rows = append(rows, selection{kind: selMine, mine: index})
+		}
+		m.rows = rows
+		if m.cursor >= len(rows) {
+			m.cursor = max(0, len(rows)-1)
+		}
+		return
+	}
 	if m.activePane == paneWorktrees {
 		rows := make([]selection, 0, len(m.worktrees))
 		for worktreeIndex, entry := range m.worktrees {

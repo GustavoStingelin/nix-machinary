@@ -350,3 +350,29 @@ func TestClient_BrowsePullRequest_reports_a_failing_browser_launch(t *testing.T)
 	// Then
 	require.Error(t, err)
 }
+
+func TestClient_ListAuthoredPullRequests_searches_the_users_own_open_pull_requests(t *testing.T) {
+	// Given
+	helper, recordPath := fakeGH(t)
+	t.Setenv("GH_SEARCH_STDOUT", "1310\tbtcsuite/btcwallet\tme\twallet: add the thing\n")
+	directory := t.TempDir()
+	client := github.NewClient(github.Config{Executable: helper})
+
+	// When
+	requests, err := client.ListAuthoredPullRequests(context.Background(), github.Directory(directory))
+
+	// Then
+	require.NoError(t, err)
+	require.Equal(t, []github.ReviewRequest{
+		{Number: "1310", Repository: "btcsuite/btcwallet", Author: "me", Title: "wallet: add the thing"},
+	}, requests)
+	require.Equal(t, invocation{
+		Directory: directory,
+		Arguments: []string{
+			"search", "prs", "--author", "@me", "--state", "open",
+			"--limit", "50",
+			"--json", "number,title,author,repository",
+			"--jq", ".[] | [.number, .repository.nameWithOwner, .author.login, .title] | @tsv",
+		},
+	}, readInvocations(t, recordPath)[0])
+}
