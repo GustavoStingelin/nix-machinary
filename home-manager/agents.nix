@@ -217,6 +217,7 @@ let
     askUserQuestionTimeout = "never";
     theme = "auto";
     editorMode = "normal";
+    outputStyle = "Concise";
     # Hindsight is the single long-term memory; Claude Code's file-based auto
     # memory would split knowledge into a store opencode can't see.
     autoMemoryEnabled = false;
