@@ -9,119 +9,80 @@ let
     exec ${pkgs.zwm}/bin/zwm attn "$@"
   '';
 
-  # opencode auto-loads local plugins from ~/.config/opencode/plugins/. Ported
-  # from herdr's agent-state plugin: it maps the full session lifecycle to the
-  # three attention states (working / waiting / finished), filters subagent
-  # (task) sessions so their lifecycle can't clobber the root agent's state, and
-  # serializes signals so the last event issued wins. opencode.json stays
-  # hand-managed.
+  # opencode v2 runs one shared background server (`opencode serve --service`)
+  # whose env belongs to whichever pane started it, so a server plugin can't
+  # tell panes apart. CLI plugins run inside each pane's own `opencode` process
+  # instead, so this is one: opencode discovers <config>/plugins/<name>/tui.ts
+  # as a CLI plugin, and with no index.ts beside it the server ignores it. It maps the session lifecycle to the three attention
+  # states (working / waiting / finished), skips subagent sessions so they can't
+  # clobber the root agent's state, and serializes signals so the last wins.
   opencodePlugin = ''
-    import { execFileSync } from "node:child_process"
+    import { execFile, execFileSync } from "node:child_process"
+
+    const run = (args) =>
+      new Promise((resolve) => {
+        execFile("zwm-attn", args, { timeout: 2000 }, () => resolve())
+      })
 
     // Marks the Zellij tab with this opencode session's attention state, via the
     // `zwm-attn` wrapper (a no-op outside Zellij).
-    export const ZwmAttnPlugin = async ({ $ }) => {
-      if (!process.env.ZELLIJ || !process.env.ZELLIJ_PANE_ID) return {}
+    export default {
+      id: "zwm-attn",
+      setup(ctx) {
+        if (!process.env.ZELLIJ || !process.env.ZELLIJ_PANE_ID) return
 
-      // When opencode exits (its tab/pane may stay open), forget the record so the
-      // dashboard doesn't keep showing a closed agent. Synchronous so it completes
-      // during process teardown.
-      process.once("exit", () => {
-        try {
-          execFileSync("zwm-attn", ["closed", "--agent", "opencode"], {
-            stdio: "ignore",
-            timeout: 2000,
-          })
-        } catch {}
-      })
+        // When opencode exits (its tab/pane may stay open), forget the record so
+        // the dashboard doesn't keep showing a closed agent. Synchronous so it
+        // completes during process teardown.
+        process.once("exit", () => {
+          try {
+            execFileSync("zwm-attn", ["closed", "--agent", "opencode"], {
+              stdio: "ignore",
+              timeout: 2000,
+            })
+          } catch {}
+        })
 
-      // Serialize signals so the last event issued is the last one written.
-      let chain = Promise.resolve()
-      const signal = (state) => {
-        chain = chain
-          .then(() => $`zwm-attn ''${state} --agent opencode`.quiet().nothrow())
-          .catch(() => {})
-        return chain
-      }
-
-      // Subagent (task) sessions carry a parentID; drop their lifecycle events so
-      // they can't clobber the pane's root state, but still surface one that is
-      // blocked on the user.
-      const childSessions = new Set()
-
-      const stateFromStatus = (status) => {
-        const kind = typeof status === "string" ? status : status?.type
-        if (typeof kind !== "string") return undefined
-        switch (kind.toLowerCase()) {
-          case "idle":
-            return "finished"
-          case "active":
-          case "busy":
-          case "pending":
-          case "running":
-          case "streaming":
-          case "working":
-          case "retry":
-            return "working"
-          default:
-            return undefined
+        // Serialize signals so the last event issued is the last one written.
+        let chain = Promise.resolve()
+        const signal = (state) => {
+          chain = chain.then(() => run([state, "--agent", "opencode"])).catch(() => {})
+          return chain
         }
-      }
 
-      return {
-        "chat.message": async ({ sessionID }) => {
-          if (sessionID && childSessions.has(sessionID)) return
-          await signal("working")
-        },
-        event: async ({ event }) => {
-          const type = event?.type
-          const properties = event?.properties ?? {}
-          const sessionID =
-            typeof properties.sessionID === "string" ? properties.sessionID : undefined
-
-          const info = properties.info
-          if (info?.id && info.parentID) childSessions.add(info.id)
-
-          if (sessionID && childSessions.has(sessionID)) {
-            switch (type) {
-              case "permission.asked":
-              case "question.asked":
-                await signal("waiting")
-                break
-              case "permission.replied":
-              case "question.replied":
-              case "question.rejected":
-                await signal("working")
-                break
-            }
-            return
+        // Subagent (task) sessions have a root other than themselves; drop their
+        // lifecycle so it can't clobber the pane's state, but still surface one
+        // that is blocked on the user.
+        const isChild = async (sessionID) => {
+          if (!sessionID) return false
+          try {
+            const root = await ctx.data.session.root(sessionID)
+            const rootID = typeof root === "string" ? root : root?.id
+            return Boolean(rootID) && rootID !== sessionID
+          } catch {
+            return false
           }
+        }
 
-          switch (type) {
-            case "session.status": {
-              const state = stateFromStatus(properties.status)
-              if (state) await signal(state)
-              break
-            }
-            case "tool.execute.before":
-            case "tool.execute.after":
-            case "permission.replied":
-            case "question.replied":
-            case "question.rejected":
-            case "session.compacted":
-              await signal("working")
-              break
-            case "permission.asked":
-            case "question.asked":
-            case "session.error":
-              await signal("waiting")
-              break
-            case "session.idle":
-              await signal("finished")
-              break
-          }
-        },
-      }
+        const on = (type, state, alsoForChildren = false) =>
+          ctx.data.on(type, async (event) => {
+            const sessionID = event?.data?.sessionID ?? event?.sessionID
+            if (!alsoForChildren && (await isChild(sessionID))) return
+            await signal(state)
+          })
+
+        const unsubscribe = [
+          on("session.execution.started", "working"),
+          on("session.execution.succeeded", "finished"),
+          on("session.execution.interrupted", "finished"),
+          on("session.execution.failed", "waiting"),
+          on("session.error", "waiting"),
+          on("permission.asked", "waiting", true),
+          on("permission.replied", "working", true),
+          on("permission.rejected", "working", true),
+        ]
+        return () => unsubscribe.forEach((off) => off?.())
+      },
     }
   '';
 
@@ -284,7 +245,7 @@ in
 {
   home.packages = [ zwmAttn ];
 
-  xdg.configFile."opencode/plugins/zwm-attn.ts".text = opencodePlugin;
+  xdg.configFile."opencode/plugins/zwm-attn/tui.ts".text = opencodePlugin;
 
   home.file.".claude/settings.json".text = builtins.toJSON claudeSettings;
 
@@ -293,4 +254,12 @@ in
 
   home.file.".claude/skills/hindsight-coding-agent".source =
     config.lib.file.mkOutOfStoreSymlink "${hindsightRuntime}/skill";
+
+  # OMO (omo-ai) is a pi fork whose agent dir is ~/.omo/agent, so it never sees
+  # the runtime's pi extension registered in ~/.pi/agent/settings.json. It
+  # auto-loads every global extension in ~/.omo/agent/extensions/, so re-export
+  # the same pi extension there, the way OMO's own built-ins are shimmed.
+  home.file.".omo/agent/extensions/hindsight.js".text = ''
+    export { default } from "file://${hindsightRuntime}/dist/pi.js";
+  '';
 }
