@@ -55,6 +55,11 @@
         source <(zwm completion zsh)
       fi
 
+      # Enable logcli completion (from grafana-loki in clis.nix)
+      if command -v logcli >/dev/null 2>&1; then
+        source <(logcli --completion-script-zsh)
+      fi
+
       # some shit bin that installs on my user folder...
       export PATH="$HOME/.signet/bin:$PATH"
 

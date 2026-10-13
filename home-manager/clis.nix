@@ -8,6 +8,7 @@
       capnproto
       cmake
       git-absorb
+      grafana-loki # provides logcli
       kubernetes-helm
       kubeseal
       libevent
