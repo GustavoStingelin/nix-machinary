@@ -60,6 +60,13 @@
         source <(logcli --completion-script-zsh)
       fi
 
+      # logcli credentials for Grafana Cloud Loki. The username (the stack's
+      # numeric Loki user ID) and the glc_ token live outside the repo so neither
+      # lands in git or the Nix store.
+      export LOKI_ADDR="https://logs-prod3.grafana.net"
+      [[ -r ~/.config/loki/username ]] && export LOKI_USERNAME="$(<~/.config/loki/username)"
+      [[ -r ~/.config/loki/token ]] && export LOKI_PASSWORD="$(<~/.config/loki/token)"
+
       # some shit bin that installs on my user folder...
       export PATH="$HOME/.signet/bin:$PATH"
 
