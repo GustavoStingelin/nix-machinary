@@ -67,9 +67,6 @@
       [[ -r ~/.config/loki/username ]] && export LOKI_USERNAME="$(<~/.config/loki/username)"
       [[ -r ~/.config/loki/token ]] && export LOKI_PASSWORD="$(<~/.config/loki/token)"
 
-      # some shit bin that installs on my user folder...
-      export PATH="$HOME/.signet/bin:$PATH"
-
       export PATH="/Users/head/.local/bin:$PATH"
     '';
 
